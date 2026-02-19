@@ -95,10 +95,10 @@ const AtmosphericBreach = ({ active, teamId, gameId }: AtmosphericBreachProps) =
 
                         <div className="bg-red-950/50 p-6 border border-red-800 mb-8">
                             <p className="font-mono text-xl text-red-200 uppercase typing-effect">
-                                &gt; ILLEGAL MANEUVER DETECTED <br />
-                                &gt; WINDOW FOCUS LOST <br />
-                                &gt; ANTI-CHEAT PROTOCOL ENGAGED <br />
-                                &gt; TEAM STATUS: <span className="font-bold text-red-500">COMPROMISED</span>
+                                {">"} ILLEGAL MANEUVER DETECTED <br />
+                                {">"} WINDOW FOCUS LOST <br />
+                                {">"} ANTI-CHEAT PROTOCOL ENGAGED <br />
+                                {">"} TEAM STATUS: <span className="font-bold text-red-500">COMPROMISED</span>
                             </p>
                         </div>
 
