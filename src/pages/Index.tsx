@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { Shield, Users, Swords, Timer, Skull, Trophy } from "lucide-react";
+import { Shield, Users, Swords, Timer, Skull, Trophy, LogOut } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const Index = () => {
@@ -13,6 +13,50 @@ const Index = () => {
   const [joinCode, setJoinCode] = useState("");
   const [showJoin, setShowJoin] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setIsAuthenticated(!!session);
+      if (session) {
+        await checkAdminRole(session.user.id);
+      } else {
+        setIsAdmin(false);
+      }
+      setCheckingAuth(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    setIsAuthenticated(!!session);
+    if (session) {
+      await checkAdminRole(session.user.id);
+    }
+    setCheckingAuth(false);
+  };
+
+  const checkAdminRole = async (userId: string) => {
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    setIsAdmin(!!roleData);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+  };
 
   const handleJoinGame = async () => {
     if (!joinCode.trim()) {
@@ -77,14 +121,41 @@ const Index = () => {
           transition={{ delay: 0.4, duration: 0.5 }}
           className="flex flex-col sm:flex-row gap-4 mb-16"
         >
-          <Button
-            size="lg"
-            onClick={() => navigate("/admin/login")}
-            className="text-lg px-8 py-6 font-display tracking-wider bg-primary hover:bg-primary/80 neon-border"
-          >
-            <Shield className="mr-2 h-5 w-5" />
-            ADMIN LOGIN
-          </Button>
+          {!checkingAuth && (
+            <>
+              {isAuthenticated ? (
+                isAdmin ? (
+                  <Button
+                    size="lg"
+                    onClick={() => navigate("/admin/dashboard")}
+                    className="text-lg px-8 py-6 font-display tracking-wider bg-primary hover:bg-primary/80 neon-border"
+                  >
+                    <Shield className="mr-2 h-5 w-5" />
+                    ADMIN DASHBOARD
+                  </Button>
+                ) : (
+                  <Button
+                    size="lg"
+                    onClick={handleLogout}
+                    variant="outline"
+                    className="text-lg px-8 py-6 font-display tracking-wider border-destructive/40 text-destructive hover:bg-destructive/10"
+                  >
+                    <LogOut className="mr-2 h-5 w-5" />
+                    SIGN OUT
+                  </Button>
+                )
+              ) : (
+                <Button
+                  size="lg"
+                  onClick={() => navigate("/admin/login")}
+                  className="text-lg px-8 py-6 font-display tracking-wider bg-primary hover:bg-primary/80 neon-border"
+                >
+                  <Shield className="mr-2 h-5 w-5" />
+                  LOGIN
+                </Button>
+              )}
+            </>
+          )}
 
           {!showJoin ? (
             <Button
