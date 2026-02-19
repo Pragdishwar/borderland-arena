@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 95%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 348 100% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 95%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
+
+    --accent: 348 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 348 100% 50%;
+
+    --radius: 0.75rem;
+
+    --neon-red: 348 100% 50%;
+    --neon-glow: 0 0px 20px hsl(348 100% 50% / 0.5);
+
+    --sidebar-background: 0 0% 6%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 348 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 348 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Rajdhani', sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Orbitron', sans-serif;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-card/60 backdrop-blur-xl border border-primary/20 shadow-lg;
+    box-shadow: 0 0 15px hsl(348 100% 50% / 0.1), inset 0 0 15px hsl(348 100% 50% / 0.05);
+  }
+  .glass-card:hover {
+    box-shadow: 0 0 25px hsl(348 100% 50% / 0.2), inset 0 0 25px hsl(348 100% 50% / 0.08);
+  }
+  .neon-text {
+    text-shadow: 0 0 10px hsl(348 100% 50% / 0.8), 0 0 40px hsl(348 100% 50% / 0.4), 0 0 80px hsl(348 100% 50% / 0.2);
+  }
+  .neon-border {
+    box-shadow: 0 0 10px hsl(348 100% 50% / 0.3), inset 0 0 10px hsl(348 100% 50% / 0.1);
+  }
+  .suit-card {
+    @apply relative overflow-hidden cursor-pointer transition-all duration-500;
+    background: linear-gradient(145deg, hsl(0 0% 8%), hsl(0 0% 5%));
+    border: 1px solid hsl(348 100% 50% / 0.2);
+  }
+  .suit-card:hover {
+    border-color: hsl(348 100% 50% / 0.6);
+    box-shadow: 0 0 30px hsl(348 100% 50% / 0.3);
+    transform: translateY(-4px) scale(1.02);
+  }
+  .suit-card.locked {
+    opacity: 0.3;
+    pointer-events: none;
+    filter: grayscale(1);
+  }
+  .suit-card.selected {
+    border-color: hsl(348 100% 50%);
+    box-shadow: 0 0 40px hsl(348 100% 50% / 0.5);
+  }
+}
+
+/* Animated background grid */
+.arena-bg {
+  background-image:
+    linear-gradient(hsl(348 100% 50% / 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(348 100% 50% / 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: grid-move 20s linear infinite;
+}
+
+@keyframes grid-move {
+  0% { background-position: 0 0; }
+  100% { background-position: 50px 50px; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
