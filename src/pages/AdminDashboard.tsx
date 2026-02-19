@@ -125,7 +125,14 @@ const AdminDashboard = () => {
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl md:text-3xl font-bold tracking-wider text-primary neon-text">ADMIN DASHBOARD</h1>
-          <Button variant="ghost" onClick={handleLogout} className="text-muted-foreground"><LogOut className="mr-2 h-4 w-4" /> Logout</Button>
+          <div className="flex gap-4">
+            <Button variant="ghost" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
+              Home
+            </Button>
+            <Button variant="ghost" onClick={handleLogout} className="text-muted-foreground hover:text-destructive">
+              <LogOut className="mr-2 h-4 w-4" /> Logout
+            </Button>
+          </div>
         </div>
 
         {!game ? (

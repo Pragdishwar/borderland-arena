@@ -11,6 +11,7 @@ import TeamSetup from "./pages/TeamSetup";
 import GameLobby from "./pages/GameLobby";
 import GamePlay from "./pages/GamePlay";
 import GameResults from "./pages/GameResults";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -23,7 +24,13 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+
+          {/* Protected Admin Routes */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          </Route>
+
           <Route path="/team-setup" element={<TeamSetup />} />
           <Route path="/game/lobby" element={<GameLobby />} />
           <Route path="/game/play" element={<GamePlay />} />

@@ -35,7 +35,7 @@ const AdminLogin = () => {
       if (error) {
         toast({ title: "Login failed", description: error.message, variant: "destructive" });
       } else {
-        // Ensure admin role exists
+        // Updated: Strictly check implementation. We no longer auto-grant admin.
         const { data: existingRole } = await supabase
           .from("user_roles")
           .select("id")
@@ -43,10 +43,16 @@ const AdminLogin = () => {
           .eq("role", "admin")
           .maybeSingle();
 
-        if (!existingRole) {
-          await supabase.from("user_roles").insert({ user_id: data.user.id, role: "admin" });
+        if (existingRole) {
+          navigate("/admin/dashboard");
+        } else {
+          toast({
+            title: "Access Denied",
+            description: "You do not have administrative privileges.",
+            variant: "destructive"
+          });
+          await supabase.auth.signOut();
         }
-        navigate("/admin/dashboard");
       }
     }
     setLoading(false);
