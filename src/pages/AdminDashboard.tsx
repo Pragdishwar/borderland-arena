@@ -40,7 +40,7 @@ const AdminDashboard = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate("/admin/login"); return; }
       setUser(user);
-      const { data: games } = await supabase.from("games").select("*").eq("admin_id", user.id).order("created_at", { ascending: false }).limit(1);
+      const { data: games } = await supabase.from("games").select("*").order("created_at", { ascending: false }).limit(1);
       if (games && games.length > 0) { setGame(games[0]); fetchTeams(games[0].id); }
     };
     checkAuth();
