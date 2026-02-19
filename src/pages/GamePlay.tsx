@@ -6,9 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Timer, Users, Skull, CheckCircle, Loader2, Maximize2 } from "lucide-react";
+import { Users, Skull, CheckCircle, Loader2, Maximize2 } from "lucide-react";
 import PlayingCard from "@/components/game/PlayingCard";
 import QuestionModal from "@/components/game/QuestionModal";
+import OrbitalTimer from "@/components/game/OrbitalTimer";
+import AtmosphericBreach from "@/components/game/AtmosphericBreach";
+
+// Import Round Views (to be created)
+import Round1View from "@/components/game/rounds/Round1View";
+import Round2View from "@/components/game/rounds/Round2View";
+import Round3View from "@/components/game/rounds/Round3View";
+import Round4View from "@/components/game/rounds/Round4View";
 
 const SUITS = [
   { key: "spades", symbol: "♠", name: "Logic Puzzles", color: "text-foreground" },
@@ -121,10 +129,13 @@ const GamePlay = () => {
     if (qs) { setQuestions(qs); setQuestionStartTime(Date.now()); setTotalAnswerTime(0); }
   };
 
-  const submitAnswer = async () => {
+  const submitAnswer = async (submittedAnswer: string) => {
     if (!questions[currentQ]) return;
+
+    // Allow overriding the answer from the view
+    const finalAnswer = submittedAnswer || answer;
     const q = questions[currentQ];
-    const isCorrect = answer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
+    const isCorrect = finalAnswer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
     const earned = isCorrect ? q.points : 0;
     const newScore = score + earned;
     setScore(newScore);
@@ -145,13 +156,36 @@ const GamePlay = () => {
     else { setRoundComplete(true); setFrozenTime(timeLeft); setShowResults(true); toast({ title: "Round complete!", description: `Score: ${newScore} | Time: ${timeLeft}s` }); }
   };
 
-  const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  // Helper to render the correct view based on round
+  const renderRoundView = () => {
+    const commonProps = {
+      currentQuestion: questions[currentQ],
+      currentQ,
+      totalQuestions: questions.length,
+      answer,
+      setAnswer,
+      submitAnswer,
+      selectedSuit: SUITS.find(s => s.key === selectedSuit)
+    };
+
+    switch (currentRound) {
+      case 1: return <Round1View {...commonProps} />;
+      case 2: return <Round2View {...commonProps} />;
+      case 3: return <Round3View {...commonProps} />;
+      case 4: return <Round4View {...commonProps} isRound4={true} />;
+      default: return <Round1View {...commonProps} />; // Fallback
+    }
+  };
+
   const isRoundActive = ["round1", "round2", "round3", "round4"].includes(gameStatus);
   const isRound4 = currentRound === 4;
   const currentQuestion = questions[currentQ];
   const isLongQuestion = currentQuestion && currentQuestion.question_text.length > 120;
 
   if (gameStatus === "finished") { navigate("/game/results"); return null; }
+
+  // Total allowed time per round (placeholder logic, assuming 60 minutes)
+  const TOTAL_ROUND_TIME = 60 * 60;
 
   if (gameStatus === "waiting") {
     return (
@@ -188,24 +222,33 @@ const GamePlay = () => {
   }
 
   return (
-    <div className="min-h-screen arena-bg p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen arena-bg p-4 md:p-8 relative overflow-hidden">
+      {/* Anti-Cheat Overlay */}
+      <AtmosphericBreach active={isRoundActive} teamId={teamId || ""} gameId={gameId || ""} />
+
+      <div className="max-w-6xl mx-auto space-y-6 relative z-10">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between glass-card p-4 rounded-xl">
           <div>
             <h2 className="font-display text-xl text-primary tracking-wider">
               ROUND {currentRound} — {currentRound === 1 ? "Entry Game" : currentRound === 2 ? "Mind Trap" : currentRound === 3 ? "Betrayal Stage" : "Final Showdown"}
             </h2>
-            <p className="font-body text-muted-foreground">Score: {score}</p>
+            <p className="font-body text-muted-foreground">Team Score: {score}</p>
           </div>
-          <div className="font-display text-3xl tracking-wider text-primary">
-            <Timer className="inline h-6 w-6 mr-2" />
-            {formatTime(frozenTime !== null ? frozenTime : timeLeft)}
+
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground font-display">ORBITAL DECAY</p>
+              <OrbitalTimer
+                totalTime={TOTAL_ROUND_TIME}
+                timeLeft={TOTAL_ROUND_TIME - (frozenTime !== null ? frozenTime : timeLeft)}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Members */}
-        <div className="flex flex-wrap gap-2">
+        {/* Member list */}
+        <div className="flex flex-wrap gap-2 justify-center md:justify-start">
           {members.map(m => (
             <div key={m.id} className={`glass-card px-3 py-1.5 rounded-full text-sm font-body flex items-center gap-1 ${m.is_eliminated ? "opacity-30" : ""}`}>
               {m.is_eliminated ? <Skull className="h-3 w-3 text-destructive" /> : <Users className="h-3 w-3 text-primary" />}
@@ -214,116 +257,58 @@ const GamePlay = () => {
           ))}
         </div>
 
-        {/* Card Selection with animations */}
-        {!suitLocked && isRoundActive && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4"
-          >
-            {shuffledSuits.map((suit, i) => (
-              <motion.div
-                key={suit.key}
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1, duration: 0.4 }}
-              >
+        {/* Card Selection Area - The Zero-G Engine */}
+        <div className="relative min-h-[400px] flex items-center justify-center">
+          {/* If no suit selected, show all cards floating */}
+          {!suitLocked && (
+            <motion.div
+              layoutId="card-container"
+              className="grid grid-cols-2 md:grid-cols-4 gap-6 w-full max-w-4xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              {shuffledSuits.map((suit, index) => (
                 <PlayingCard
+                  key={suit.key}
                   suit={suit}
+                  index={index}
                   isUsed={usedSuits.includes(suit.key)}
                   isRound4={isRound4}
                   onClick={() => selectSuit(suit.key)}
                 />
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-
-        {/* Question area with slide animation */}
-        <AnimatePresence mode="wait">
-          {suitLocked && questions.length > 0 && currentQ < questions.length && isRoundActive && (
-            <motion.div
-              key={currentQ}
-              initial={{ opacity: 0, x: 60 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -60 }}
-              transition={{ duration: 0.35 }}
-            >
-              <Card className="glass-card">
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      {/* Selected suit indicator */}
-                      <span className={`text-3xl ${SUITS.find(s => s.key === selectedSuit)?.color}`}>
-                        {SUITS.find(s => s.key === selectedSuit)?.symbol}
-                      </span>
-                      <span className="font-display text-sm text-muted-foreground">Q{currentQ + 1}/{questions.length}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-display text-sm text-primary">{currentQuestion.points} pts</span>
-                      {isLongQuestion && (
-                        <Button size="icon" variant="ghost" onClick={() => setModalOpen(true)}>
-                          <Maximize2 className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Question image */}
-                  {currentQuestion.image_url && (
-                    <img src={currentQuestion.image_url} alt="Question" className="w-full max-h-48 object-contain rounded-lg" />
-                  )}
-
-                  <p className={`font-body text-lg text-foreground ${isLongQuestion ? "line-clamp-3 cursor-pointer" : ""}`}
-                    onClick={() => isLongQuestion && setModalOpen(true)}>
-                    {currentQuestion.question_text}
-                  </p>
-
-                  {currentQuestion.options && Array.isArray(currentQuestion.options) && (currentQuestion.options as string[]).length > 0 ? (
-                    <div className="grid grid-cols-1 gap-3">
-                      {(currentQuestion.options as string[]).map((opt, i) => (
-                        <Button key={i} variant={answer === opt ? "default" : "outline"}
-                          onClick={() => setAnswer(opt)}
-                          className={`justify-start text-left font-body ${answer === opt ? "bg-primary" : "border-primary/20"}`}>
-                          {opt}
-                        </Button>
-                      ))}
-                    </div>
-                  ) : (
-                    <Input placeholder="Your answer..." value={answer} onChange={e => setAnswer(e.target.value)}
-                      className="bg-secondary border-primary/20 font-body text-lg" onKeyDown={e => e.key === "Enter" && submitAnswer()} />
-                  )}
-
-                  <Button onClick={submitAnswer} disabled={!answer.trim()} className="w-full font-display tracking-wider bg-primary hover:bg-primary/80 neon-border">
-                    <CheckCircle className="mr-2 h-4 w-4" /> SUBMIT
-                  </Button>
-                </CardContent>
-              </Card>
+              ))}
             </motion.div>
           )}
-        </AnimatePresence>
+
+          {/* If suit selected, move selected card to center (conceptually) */}
+          <AnimatePresence mode="wait">
+            {suitLocked && (
+              <motion.div
+                key="round-content"
+                initial={{ opacity: 0, scale: 0.9, y: 50 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 50 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="w-full"
+              >
+                {questions.length > 0 && currentQ < questions.length ? renderRoundView() : (
+                  <Card className="glass-card w-full">
+                    <CardContent className="p-12 text-center">
+                      <p className="font-display text-xl text-muted-foreground">Initializing Module...</p>
+                      {(questions.length === 0) && <p className="text-muted-foreground mt-2">Waiting for admin to inject protocol.</p>}
+                    </CardContent>
+                  </Card>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Modal for long questions */}
         <QuestionModal open={modalOpen} onClose={() => setModalOpen(false)}
           questionText={currentQuestion?.question_text || ""} imageUrl={currentQuestion?.image_url} />
 
-        {/* Round complete */}
-        {suitLocked && questions.length > 0 && currentQ >= questions.length && isRoundActive && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 space-y-4">
-            <CheckCircle className="h-12 w-12 text-primary mx-auto" />
-            <h3 className="font-display text-2xl text-primary neon-text">ROUND {currentRound} COMPLETE</h3>
-            <p className="font-display text-4xl text-foreground">{score} PTS</p>
-            <p className="text-muted-foreground font-body text-lg animate-pulse-glow">Waiting for admin to end the round...</p>
-          </motion.div>
-        )}
-
-        {suitLocked && questions.length === 0 && (
-          <div className="text-center py-12">
-            <p className="font-display text-xl text-muted-foreground">No questions available for this suit yet.</p>
-            <p className="font-body text-muted-foreground mt-2">The admin will add questions soon.</p>
-          </div>
-        )}
       </div>
     </div>
   );
