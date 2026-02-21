@@ -222,10 +222,6 @@ const GamePlay = () => {
         current_q_index: nextQIndex
       }).eq("team_id", teamId!).eq("game_id", gameId!).eq("round_number", currentRound);
 
-      const { data: allScores } = await supabase.from("round_scores").select("score").eq("team_id", teamId!).eq("game_id", gameId!);
-      const totalScore = allScores?.reduce((acc, s) => acc + s.score, 0) || 0;
-      await supabase.from("teams").update({ total_score: totalScore }).eq("id", teamId!);
-
       setAnswer("");
       if (nextQIndex < questions.length) {
         setCurrentQ(nextQIndex);
