@@ -87,10 +87,18 @@ const QuestionManager = ({ gameId }: Props) => {
     };
 
     if (editingId) {
-      await supabase.from("questions").update(payload).eq("id", editingId);
+      const { error } = await supabase.from("questions").update(payload).eq("id", editingId);
+      if (error) {
+        toast({ title: "Failed to update", description: error.message, variant: "destructive" });
+        return;
+      }
       toast({ title: `Question ${editingSlot} updated` });
     } else {
-      await supabase.from("questions").insert(payload);
+      const { error } = await supabase.from("questions").insert(payload);
+      if (error) {
+        toast({ title: "Failed to add", description: error.message, variant: "destructive" });
+        return;
+      }
       toast({ title: `Question ${editingSlot} added` });
     }
     resetForm();
