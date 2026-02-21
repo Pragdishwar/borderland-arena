@@ -37,6 +37,7 @@ const AdminDashboard = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [gamesList, setGamesList] = useState<Game[]>([]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -49,10 +50,10 @@ const AdminDashboard = () => {
         .from("games")
         .select("*")
         .neq('status', 'finished') // Optional: Prefer active games? Or just latest? Plan said latest.
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .order("created_at", { ascending: false });
 
       if (games && games.length > 0) {
+        setGamesList(games);
         setGame(games[0]);
         await fetchTeams(games[0].id);
       }
@@ -72,12 +73,20 @@ const AdminDashboard = () => {
   }, [game?.id]);
 
   const fetchTeams = async (gameId: string) => {
-    const { data: teamsData } = await supabase.from("teams").select("id, name, total_score, is_disqualified, ban_count").eq("game_id", gameId);
+    const { data: teamsData, error: parseError } = await supabase.from("teams").select("id, name, total_score, is_disqualified, ban_count").eq("game_id", gameId);
+    if (parseError) {
+      console.error("Teams fetch error:", parseError);
+      toast({ title: "Database Error", description: parseError.message, variant: "destructive" });
+      return;
+    }
     if (!teamsData) return;
     const teamsWithMembers: Team[] = await Promise.all(
       teamsData.map(async (t) => {
-        const { data: mems } = await supabase.from("members").select("id, name, is_eliminated, eliminated_round").eq("team_id", t.id);
-        const { data: scores } = await supabase.from("round_scores").select("round_number, score, answer_time_seconds").eq("team_id", t.id).eq("game_id", gameId);
+        const { data: mems, error: memError } = await supabase.from("members").select("id, name, is_eliminated, eliminated_round").eq("team_id", t.id);
+        const { data: scores, error: scoreError } = await supabase.from("round_scores").select("round_number, score, answer_time_seconds").eq("team_id", t.id).eq("game_id", gameId);
+
+        if (memError) console.error("Member fetch error:", memError);
+        if (scoreError) console.error("Score fetch error:", scoreError);
         const totalTime = scores?.reduce((acc, s) => acc + (s.answer_time_seconds || 0), 0) || 0;
         const totalScore = scores?.reduce((acc, s) => acc + (s.score || 0), 0) || 0;
         const roundScores: Record<number, number> = {};
@@ -162,7 +171,27 @@ const AdminDashboard = () => {
     <div className="min-h-screen arena-bg p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="font-display text-2xl md:text-3xl font-bold tracking-wider text-primary neon-text">ADMIN DASHBOARD</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="font-display text-2xl md:text-3xl font-bold tracking-wider text-primary neon-text">ADMIN DASHBOARD</h1>
+            {gamesList.length > 1 && (
+              <select
+                title="Select Game Lobby"
+                className="bg-black/80 border border-primary/50 text-white font-mono text-sm px-3 py-2 rounded focus:outline-none focus:ring-1 focus:ring-primary shadow-[0_0_10px_rgba(var(--primary),0.2)]"
+                value={game?.id || ""}
+                onChange={(e) => {
+                  const selected = gamesList.find(g => g.id === e.target.value);
+                  if (selected) {
+                    setGame(selected);
+                    fetchTeams(selected.id);
+                  }
+                }}
+              >
+                {gamesList.map(g => (
+                  <option key={g.id} value={g.id} className="bg-black text-white">Lobby: {g.join_code} ({g.status})</option>
+                ))}
+              </select>
+            )}
+          </div>
           <div className="flex gap-4">
             <Button variant="ghost" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
               Home
