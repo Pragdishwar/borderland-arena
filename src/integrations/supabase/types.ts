@@ -225,6 +225,7 @@ export type Database = {
           name: string
           total_score: number
           is_disqualified: boolean
+          ban_count: number
         }
         Insert: {
           created_at?: string
@@ -233,6 +234,7 @@ export type Database = {
           name: string
           total_score?: number
           is_disqualified?: boolean
+          ban_count?: number
         }
         Update: {
           created_at?: string
@@ -241,6 +243,7 @@ export type Database = {
           name?: string
           total_score?: number
           is_disqualified?: boolean
+          ban_count?: number
         }
         Relationships: [
           {
