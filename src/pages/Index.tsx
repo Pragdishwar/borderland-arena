@@ -21,36 +21,58 @@ const Index = () => {
     checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setIsAuthenticated(!!session);
-      if (session) {
-        await checkAdminRole(session.user.id);
-      } else {
-        setIsAdmin(false);
+      try {
+        setIsAuthenticated(!!session);
+        if (session) {
+          await checkAdminRole(session.user.id);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (err) {
+        console.error("Auth change error:", err);
+      } finally {
+        setCheckingAuth(false);
       }
-      setCheckingAuth(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    setIsAuthenticated(!!session);
-    if (session) {
-      await checkAdminRole(session.user.id);
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      setIsAuthenticated(!!session);
+      if (session) {
+        await checkAdminRole(session.user.id);
+      }
+    } catch (err) {
+      console.error("Auth check failed:", err);
+      setIsAuthenticated(false);
+    } finally {
+      setCheckingAuth(false);
     }
-    setCheckingAuth(false);
   };
 
   const checkAdminRole = async (userId: string) => {
-    const { data: roleData } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
+    try {
+      const { data: roleData, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
 
-    setIsAdmin(!!roleData);
+      if (error) {
+        console.error("Check admin role error:", error);
+        setIsAdmin(false);
+        return;
+      }
+      setIsAdmin(!!roleData);
+    } catch (err) {
+      console.error("Check admin role exception:", err);
+      setIsAdmin(false);
+    }
   };
 
   const handleLogout = async () => {
