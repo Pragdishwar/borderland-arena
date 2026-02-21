@@ -265,48 +265,58 @@ const AdminDashboard = () => {
             <QuestionManager gameId={game.id} />
 
             {/* Teams */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {teams.map((team) => (
-                <Card key={team.id} className={`glass-card ${team.is_disqualified ? 'border-destructive/50 shadow-[0_0_15px_rgba(220,38,38,0.3)]' : ''}`}>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="font-display text-lg tracking-wider text-primary flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className={`flex items-center gap-2 ${team.is_disqualified ? 'text-destructive' : ''}`}>
-                          <Users className="h-4 w-4" /> {team.name}
-                        </span>
-                        {team.ban_count > 0 && (
-                          <span className="text-[10px] text-destructive/80 font-mono mt-0.5 font-bold tracking-wider">
-                            WARNINGS: {team.ban_count}
-                          </span>
-                        )}
-                        {team.is_disqualified && (
-                          <div className="flex flex-col items-start gap-2 mt-2">
-                            <span className="text-xs text-destructive flex items-center font-mono uppercase tracking-widest"><Skull className="h-3 w-3 mr-1" /> Disqualified (Cheat Flag)</span>
-                            <Button size="sm" variant="outline" onClick={() => unbanTeam(team.id)} className="h-6 text-[10px] pb-5 pt-5 neon-border border-destructive text-destructive hover:bg-destructive hover:text-white font-display">REMOVE FLAG</Button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <span className="text-foreground text-sm block font-bold">{team.total_score} pts</span>
-                        <div className="flex gap-1.5 justify-end mt-0.5">
-                          {[1, 2, 3, 4].map(r => (
-                            <span key={r} className="text-muted-foreground text-[10px] font-body">R{r}: {team.round_scores[r] ?? "-"}</span>
-                          ))}
-                        </div>
-                        <span className="text-muted-foreground text-xs block">⏱ {team.total_time}s</span>
-                      </div>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {team.members.map(m => (
-                      <div key={m.id} className={`flex items-center justify-between px-3 py-2 rounded-lg ${m.is_eliminated ? "bg-destructive/10 line-through opacity-50" : "bg-secondary/50"}`}>
-                        <span className="font-body text-sm">{m.name}</span>
-                        {m.is_eliminated && <span className="flex items-center gap-1 text-xs text-destructive font-display"><Skull className="h-3 w-3" /> R{m.eliminated_round}</span>}
-                      </div>
-                    ))}
+            <div className="space-y-4">
+              {teams.length === 0 ? (
+                <Card className="glass-card border-dashed border-primary/20">
+                  <CardContent className="p-8 text-center text-muted-foreground font-body">
+                    No teams have joined this lobby yet.
                   </CardContent>
                 </Card>
-              ))}
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {teams.map((team) => (
+                    <Card key={team.id} className={`glass-card ${team.is_disqualified ? 'border-destructive/50 shadow-[0_0_15px_rgba(220,38,38,0.3)]' : ''}`}>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="font-display text-lg tracking-wider text-primary flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <span className={`flex items-center gap-2 ${team.is_disqualified ? 'text-destructive' : ''}`}>
+                              <Users className="h-4 w-4" /> {team.name}
+                            </span>
+                            {team.ban_count > 0 && (
+                              <span className="text-[10px] text-destructive/80 font-mono mt-0.5 font-bold tracking-wider">
+                                WARNINGS: {team.ban_count}
+                              </span>
+                            )}
+                            {team.is_disqualified && (
+                              <div className="flex flex-col items-start gap-2 mt-2">
+                                <span className="text-xs text-destructive flex items-center font-mono uppercase tracking-widest"><Skull className="h-3 w-3 mr-1" /> Disqualified (Cheat Flag)</span>
+                                <Button size="sm" variant="outline" onClick={() => unbanTeam(team.id)} className="h-6 text-[10px] pb-5 pt-5 neon-border border-destructive text-destructive hover:bg-destructive hover:text-white font-display">REMOVE FLAG</Button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <span className="text-foreground text-sm block font-bold">{team.total_score} pts</span>
+                            <div className="flex gap-1.5 justify-end mt-0.5">
+                              {[1, 2, 3, 4].map(r => (
+                                <span key={r} className="text-muted-foreground text-[10px] font-body">R{r}: {team.round_scores[r] ?? "-"}</span>
+                              ))}
+                            </div>
+                            <span className="text-muted-foreground text-xs block">⏱ {team.total_time}s</span>
+                          </div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {team.members.map(m => (
+                          <div key={m.id} className={`flex items-center justify-between px-3 py-2 rounded-lg ${m.is_eliminated ? "bg-destructive/10 line-through opacity-50" : "bg-secondary/50"}`}>
+                            <span className="font-body text-sm">{m.name}</span>
+                            {m.is_eliminated && <span className="flex items-center gap-1 text-xs text-destructive font-display"><Skull className="h-3 w-3" /> R{m.eliminated_round}</span>}
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}
