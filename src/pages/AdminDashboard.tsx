@@ -34,14 +34,27 @@ const AdminDashboard = () => {
   const [game, setGame] = useState<Game | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate("/admin/login"); return; }
       setUser(user);
-      const { data: games } = await supabase.from("games").select("*").order("created_at", { ascending: false }).limit(1);
-      if (games && games.length > 0) { setGame(games[0]); fetchTeams(games[0].id); }
+
+      // Fetch the latest active game (now shared across all admins)
+      const { data: games } = await supabase
+        .from("games")
+        .select("*")
+        .neq('status', 'finished') // Optional: Prefer active games? Or just latest? Plan said latest.
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (games && games.length > 0) {
+        setGame(games[0]);
+        await fetchTeams(games[0].id);
+      }
+      setLoading(false);
     };
     checkAuth();
   }, [navigate]);
@@ -81,11 +94,17 @@ const AdminDashboard = () => {
 
   const createGame = async () => {
     if (!user) return;
+    setLoading(true);
     const code = generateCode();
     const { data, error } = await supabase.from("games").insert({ admin_id: user.id, join_code: code, name: "Borderland Arena" }).select().single();
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
     setGame(data);
     toast({ title: "Game created!", description: `Code: ${code}` });
+    setLoading(false);
   };
 
   const startRound = async (round: number) => {
@@ -119,6 +138,14 @@ const AdminDashboard = () => {
     };
     return map[s] || s;
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen arena-bg p-4 md:p-8 flex items-center justify-center">
+        <div className="text-primary animate-pulse font-display text-xl tracking-widest">LOADING SYSTEM...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen arena-bg p-4 md:p-8">
