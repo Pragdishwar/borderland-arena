@@ -11,18 +11,10 @@ import { Users, Plus, X, ArrowLeft, Loader2 } from "lucide-react";
 const TeamSetup = () => {
   const navigate = useNavigate();
   const [teamName, setTeamName] = useState("");
-  const [members, setMembers] = useState<string[]>([""]);
+  const [members, setMembers] = useState<string[]>(["", "", "", ""]);
   const [loading, setLoading] = useState(false);
 
   const gameId = localStorage.getItem("game_id");
-
-  const addMember = () => {
-    if (members.length < 6) setMembers([...members, ""]);
-  };
-
-  const removeMember = (i: number) => {
-    if (members.length > 1) setMembers(members.filter((_, idx) => idx !== i));
-  };
 
   const updateMember = (i: number, val: string) => {
     const updated = [...members];
@@ -36,8 +28,8 @@ const TeamSetup = () => {
       return;
     }
     const validMembers = members.filter((m) => m.trim());
-    if (validMembers.length < 2) {
-      toast({ title: "Add at least 2 members", variant: "destructive" });
+    if (validMembers.length !== 4) {
+      toast({ title: "Rule Enforcement", description: "You must enter exactly 4 total operatives.", variant: "destructive" });
       return;
     }
     if (!gameId) {
@@ -105,32 +97,23 @@ const TeamSetup = () => {
             />
 
             <div className="space-y-3">
-              <p className="font-display text-sm text-muted-foreground tracking-wider">MEMBERS ({members.length}/6)</p>
+              <p className="font-display text-sm text-muted-foreground tracking-wider">4 OPERATIVES REQUIRED</p>
               {members.map((member, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.1 }}
                   className="flex gap-2"
                 >
                   <Input
-                    placeholder={`Member ${i + 1}`}
+                    placeholder={`Operative ${i + 1}`}
                     value={member}
                     onChange={(e) => updateMember(i, e.target.value)}
                     className="bg-secondary border-primary/20 font-body"
                   />
-                  {members.length > 1 && (
-                    <Button variant="ghost" size="icon" onClick={() => removeMember(i)} className="text-destructive">
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
                 </motion.div>
               ))}
-              {members.length < 6 && (
-                <Button variant="outline" onClick={addMember} className="w-full border-dashed border-primary/30 text-primary">
-                  <Plus className="mr-2 h-4 w-4" /> Add Member
-                </Button>
-              )}
             </div>
 
             <Button
