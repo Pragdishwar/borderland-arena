@@ -173,6 +173,7 @@ export type Database = {
           score: number
           suit_chosen: string | null
           team_id: string
+          current_q_index: number
         }
         Insert: {
           answer_time_seconds?: number | null
@@ -183,6 +184,7 @@ export type Database = {
           score?: number
           suit_chosen?: string | null
           team_id: string
+          current_q_index?: number
         }
         Update: {
           answer_time_seconds?: number | null
@@ -193,6 +195,7 @@ export type Database = {
           score?: number
           suit_chosen?: string | null
           team_id?: string
+          current_q_index?: number
         }
         Relationships: [
           {

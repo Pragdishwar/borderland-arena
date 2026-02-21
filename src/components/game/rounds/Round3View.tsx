@@ -9,10 +9,11 @@ type RoundViewProps = {
     answer: string;
     setAnswer: (a: string) => void;
     submitAnswer: (a: string) => void;
+    isSubmitting: boolean;
     selectedSuit: any;
 };
 
-const Round3View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, selectedSuit }: RoundViewProps) => {
+const Round3View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, selectedSuit }: RoundViewProps) => {
     if (!currentQuestion) return null;
 
     return (
@@ -68,7 +69,7 @@ const Round3View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                 <div className="bg-[#007acc] p-2 flex justify-end items-center">
                     <Button
                         onClick={() => submitAnswer(answer)}
-                        disabled={!answer.trim()}
+                        disabled={!answer.trim() || isSubmitting}
                         variant="ghost"
                         className="text-white hover:bg-white/10 font-mono text-xs h-8"
                     >

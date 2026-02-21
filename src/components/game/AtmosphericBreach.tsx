@@ -15,6 +15,18 @@ const AtmosphericBreach = ({ active, teamId, gameId }: AtmosphericBreachProps) =
     const [disqualified, setDisqualified] = useState(false);
 
     useEffect(() => {
+        if (!teamId) return;
+        const checkStatus = async () => {
+            const { data } = await supabase.from('teams').select('is_disqualified').eq('id', teamId).maybeSingle();
+            if (data?.is_disqualified) {
+                setDisqualified(true);
+                setBreachDetected(true);
+            }
+        };
+        checkStatus();
+    }, [teamId]);
+
+    useEffect(() => {
         if (!active || disqualified) return;
 
         const handleVisibilityChange = () => {
