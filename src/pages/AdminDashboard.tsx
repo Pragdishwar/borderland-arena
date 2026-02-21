@@ -26,6 +26,7 @@ type Team = {
   round_scores: Record<number, number>;
   members: { id: string; name: string; is_eliminated: boolean; eliminated_round: number | null }[];
   is_disqualified: boolean;
+  ban_count: number;
 };
 
 const ROUND_NAMES: Record<number, string> = { 1: "Entry Game", 2: "Mind Trap", 3: "Betrayal Stage", 4: "Final Showdown" };
@@ -71,7 +72,7 @@ const AdminDashboard = () => {
   }, [game?.id]);
 
   const fetchTeams = async (gameId: string) => {
-    const { data: teamsData } = await supabase.from("teams").select("id, name, total_score, is_disqualified").eq("game_id", gameId);
+    const { data: teamsData } = await supabase.from("teams").select("id, name, total_score, is_disqualified, ban_count").eq("game_id", gameId);
     if (!teamsData) return;
     const teamsWithMembers: Team[] = await Promise.all(
       teamsData.map(async (t) => {
@@ -244,6 +245,11 @@ const AdminDashboard = () => {
                         <span className={`flex items-center gap-2 ${team.is_disqualified ? 'text-destructive' : ''}`}>
                           <Users className="h-4 w-4" /> {team.name}
                         </span>
+                        {team.ban_count > 0 && (
+                          <span className="text-[10px] text-destructive/80 font-mono mt-0.5 font-bold tracking-wider">
+                            WARNINGS: {team.ban_count}
+                          </span>
+                        )}
                         {team.is_disqualified && (
                           <div className="flex flex-col items-start gap-2 mt-2">
                             <span className="text-xs text-destructive flex items-center font-mono uppercase tracking-widest"><Skull className="h-3 w-3 mr-1" /> Disqualified (Cheat Flag)</span>

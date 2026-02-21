@@ -61,7 +61,7 @@ const GamePlay = () => {
   const [previousRoundsTime, setPreviousRoundsTime] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; total_score: number; is_disqualified: boolean }[]>([]);
+  const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; total_score: number; is_disqualified: boolean; ban_count: number }[]>([]);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [playedMemberIds, setPlayedMemberIds] = useState<string[]>([]);
 
@@ -122,10 +122,11 @@ const GamePlay = () => {
           setPreviousRoundsTime(prev => frozenTime !== null ? frozenTime : prev);
           setSelectedSuit(null); setSuitLocked(false); setQuestions([]); setCurrentQ(0); setActiveMemberId(null);
           setScore(0); setAnswer(""); setShowResults(false); setRoundComplete(false); setFrozenTime(null);
+
+          const newRound = g.current_round as number;
           supabase.from("round_scores").select("suit_chosen, round_number, active_member_id").eq("team_id", teamId!).eq("game_id", gameId!)
             .then(({ data }) => {
               if (data) {
-                const newRound = g.current_round as number;
                 setUsedSuits(data.filter(rs => rs.round_number !== newRound && rs.suit_chosen).map(rs => rs.suit_chosen!));
                 setPlayedMemberIds(data.filter(rs => rs.round_number !== newRound && rs.active_member_id).map(rs => rs.active_member_id!));
               }
@@ -150,13 +151,28 @@ const GamePlay = () => {
   }, [roundStartedAt, currentRound, roundComplete, previousRoundsTime]);
 
   const fetchLeaderboard = async () => {
-    const { data } = await supabase
+    const { data: teamsData } = await supabase
       .from("teams")
-      .select("id, name, total_score, is_disqualified")
-      .eq("game_id", gameId)
-      .order("total_score", { ascending: false })
-      .limit(5);
-    if (data) setLeaderboard(data);
+      .select("id, name, is_disqualified, ban_count")
+      .eq("game_id", gameId);
+
+    if (!teamsData) return;
+
+    const { data: scoresData } = await supabase
+      .from("round_scores")
+      .select("team_id, score, answer_time_seconds")
+      .eq("game_id", gameId);
+
+    const compiledTeams = teamsData.map(team => {
+      const teamScores = scoresData?.filter(s => s.team_id === team.id) || [];
+      const totalScore = teamScores.reduce((acc, s) => acc + (s.score || 0), 0);
+      const totalTime = teamScores.reduce((acc, s) => acc + (s.answer_time_seconds || 0), 0);
+      return { ...team, total_score: totalScore, total_time: totalTime };
+    });
+
+    compiledTeams.sort((a, b) => b.total_score - a.total_score || a.total_time - b.total_time);
+
+    setLeaderboard(compiledTeams.slice(0, 5));
   };
 
   const selectOperative = async (memberId: string) => {
@@ -173,7 +189,7 @@ const GamePlay = () => {
     setSuitLocked(true);
     await supabase.from("round_scores").upsert({ team_id: teamId!, game_id: gameId!, round_number: currentRound, suit_chosen: suit, active_member_id: activeMemberId }, { onConflict: "team_id,game_id,round_number" });
     const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("round_number", currentRound).eq("suit", suit).order("question_number");
-    if (qs) { setQuestions(qs); setQuestionStartTime(Date.now()); setTotalAnswerTime(0); }
+    if (qs) { setQuestions(qs as Question[]); setQuestionStartTime(Date.now()); setTotalAnswerTime(0); }
   };
 
   const submitAnswer = async (submittedAnswer: string) => {
@@ -302,6 +318,11 @@ const GamePlay = () => {
                     <div className="flex items-center gap-2">
                       {team.is_disqualified ? (
                         <span className="text-destructive font-mono text-xs uppercase">Disqualified</span>
+                      ) : team.ban_count > 0 ? (
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-white">{team.total_score} <span className="text-xs text-muted-foreground font-normal">pts</span></span>
+                          <span className="text-[10px] text-destructive font-mono font-bold">({team.ban_count} BANS)</span>
+                        </div>
                       ) : (
                         <span className="font-mono font-bold text-white">{team.total_score} <span className="text-xs text-muted-foreground font-normal">pts</span></span>
                       )}
