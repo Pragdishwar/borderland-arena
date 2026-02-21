@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
@@ -64,6 +64,7 @@ const GamePlay = () => {
   const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; total_score: number; is_disqualified: boolean; ban_count: number }[]>([]);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [playedMemberIds, setPlayedMemberIds] = useState<string[]>([]);
+  const isSubmittingRef = useRef(false);
 
   // Shuffle suits randomly per render
   const shuffledSuits = useMemo(() => [...SUITS].sort(() => Math.random() - 0.5), [currentRound]);
@@ -77,11 +78,8 @@ const GamePlay = () => {
         setGameStatus(game.status);
         setCurrentRound(game.current_round);
         setRoundStartedAt(game.round_started_at);
-
-        if (game.status === "between_rounds" || game.status === "finished") {
-          fetchLeaderboard();
-        }
       }
+      fetchLeaderboard();
 
       const { data: mems } = await supabase.from("members").select("id, name, is_eliminated").eq("team_id", teamId);
       if (mems) setMembers(mems);
@@ -136,6 +134,8 @@ const GamePlay = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "members" }, () => {
         supabase.from("members").select("id, name, is_eliminated").eq("team_id", teamId!).then(({ data }) => { if (data) setMembers(data); });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "teams", filter: `game_id=eq.${gameId}` }, () => { fetchLeaderboard(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "round_scores", filter: `game_id=eq.${gameId}` }, () => { fetchLeaderboard(); })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -193,7 +193,10 @@ const GamePlay = () => {
   };
 
   const submitAnswer = async (submittedAnswer: string) => {
-    if (!questions[currentQ] || isSubmitting) return;
+    if (!questions[currentQ] || isSubmitting || isSubmittingRef.current) return;
+
+    // Lock synchronously to prevent rapid-fire Enter spam
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -209,8 +212,8 @@ const GamePlay = () => {
       setScore(newScore);
       setTotalAnswerTime(newTotalTime);
 
-      if (isCorrect) toast({ title: `+${q.points} points!`, description: `Correct! (${elapsed}s)` });
-      else toast({ title: "Wrong!", description: `Answer: ${q.correct_answer}`, variant: "destructive" });
+      // Hide the correct answers from the players to prevent team leakage!
+      toast({ title: "Answer Encrypted & Locked", description: "Awaiting final round tabulation..." });
 
       const nextQIndex = currentQ + 1;
       await supabase.from("round_scores").update({
@@ -231,11 +234,47 @@ const GamePlay = () => {
         setRoundComplete(true);
         setFrozenTime(timeLeft);
         setShowResults(true);
-        toast({ title: "Round complete!", description: `Score: ${newScore} | Time: ${timeLeft}s` });
+        toast({ title: "Round complete!", description: "Awaiting admin confirmation." });
       }
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
+  };
+
+  const renderLeaderboardUI = () => {
+    if (leaderboard.length === 0) return null;
+    return (
+      <div className="max-w-md mx-auto bg-black/40 border border-primary/20 rounded-xl p-6 shadow-[0_0_30px_rgba(0,0,0,0.5)] mt-8">
+        <h3 className="font-display text-xl text-primary mb-4 tracking-widest text-center">TOP RANKINGS</h3>
+        <div className="space-y-3">
+          {leaderboard.map((team, index) => (
+            <div key={team.id} className={`flex items-center justify-between p-3 rounded bg-black/60 border ${team.id === teamId ? 'border-primary shadow-[0_0_10px_rgba(var(--primary),0.3)]' : 'border-white/5'} ${team.is_disqualified ? 'opacity-30' : ''}`}>
+              <div className="flex items-center gap-3">
+                <span className={`font-mono font-bold ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                  #{index + 1}
+                </span>
+                <span className={`font-body truncate max-w-[150px] ${team.id === teamId ? 'text-primary font-bold' : 'text-gray-300'}`}>
+                  {team.name} {team.id === teamId && "(You)"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {team.is_disqualified ? (
+                  <span className="text-destructive font-mono text-xs uppercase">Disqualified</span>
+                ) : team.ban_count > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-white">{team.total_score} <span className="text-xs text-muted-foreground font-normal">pts</span></span>
+                    <span className="text-[10px] text-destructive font-mono font-bold">({team.ban_count} BANS)</span>
+                  </div>
+                ) : (
+                  <span className="font-mono font-bold text-white">{team.total_score} <span className="text-xs text-muted-foreground font-normal">pts</span></span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   // Helper to render the correct view based on round
@@ -301,37 +340,7 @@ const GamePlay = () => {
           </div>
 
           {/* Leaderboard */}
-          {leaderboard.length > 0 && (
-            <div className="max-w-md mx-auto bg-black/40 border border-primary/20 rounded-xl p-6 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-              <h3 className="font-display text-xl text-primary mb-4 tracking-widest text-center">TOP RANKINGS</h3>
-              <div className="space-y-3">
-                {leaderboard.map((team, index) => (
-                  <div key={team.id} className={`flex items-center justify-between p-3 rounded bg-black/60 border ${team.id === teamId ? 'border-primary shadow-[0_0_10px_rgba(var(--primary),0.3)]' : 'border-white/5'} ${team.is_disqualified ? 'opacity-30' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`font-mono font-bold ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>
-                        #{index + 1}
-                      </span>
-                      <span className={`font-body truncate max-w-[150px] ${team.id === teamId ? 'text-primary font-bold' : 'text-gray-300'}`}>
-                        {team.name} {team.id === teamId && "(You)"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {team.is_disqualified ? (
-                        <span className="text-destructive font-mono text-xs uppercase">Disqualified</span>
-                      ) : team.ban_count > 0 ? (
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-white">{team.total_score} <span className="text-xs text-muted-foreground font-normal">pts</span></span>
-                          <span className="text-[10px] text-destructive font-mono font-bold">({team.ban_count} BANS)</span>
-                        </div>
-                      ) : (
-                        <span className="font-mono font-bold text-white">{team.total_score} <span className="text-xs text-muted-foreground font-normal">pts</span></span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {renderLeaderboardUI()}
         </motion.div>
       </div>
     );
@@ -463,6 +472,8 @@ const GamePlay = () => {
         <QuestionModal open={modalOpen} onClose={() => setModalOpen(false)}
           questionText={currentQuestion?.question_text || ""} imageUrl={currentQuestion?.image_url} />
 
+        {/* Live Leaderboard for Active Round */}
+        {renderLeaderboardUI()}
       </div>
     </div>
   );
