@@ -174,6 +174,7 @@ export type Database = {
           suit_chosen: string | null
           team_id: string
           current_q_index: number
+          active_member_id: string | null
         }
         Insert: {
           answer_time_seconds?: number | null
@@ -185,6 +186,7 @@ export type Database = {
           suit_chosen?: string | null
           team_id: string
           current_q_index?: number
+          active_member_id?: string | null
         }
         Update: {
           answer_time_seconds?: number | null
@@ -196,6 +198,7 @@ export type Database = {
           suit_chosen?: string | null
           team_id?: string
           current_q_index?: number
+          active_member_id?: string | null
         }
         Relationships: [
           {

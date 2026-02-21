@@ -21,9 +21,29 @@ const AtmosphericBreach = ({ active, teamId, gameId }: AtmosphericBreachProps) =
             if (data?.is_disqualified) {
                 setDisqualified(true);
                 setBreachDetected(true);
+            } else {
+                setDisqualified(false);
+                setBreachDetected(false);
             }
         };
         checkStatus();
+
+        const channel = supabase.channel(`breach-listener-${teamId}`)
+            .on("postgres_changes", { event: "UPDATE", schema: "public", table: "teams", filter: `id=eq.${teamId}` }, (payload) => {
+                const updatedTeam = payload.new as any;
+                if (updatedTeam.is_disqualified) {
+                    setDisqualified(true);
+                    setBreachDetected(true);
+                } else {
+                    setDisqualified(false);
+                    setBreachDetected(false);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [teamId]);
 
     useEffect(() => {

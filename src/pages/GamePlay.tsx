@@ -62,6 +62,8 @@ const GamePlay = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; total_score: number; is_disqualified: boolean }[]>([]);
+  const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
+  const [playedMemberIds, setPlayedMemberIds] = useState<string[]>([]);
 
   // Shuffle suits randomly per render
   const shuffledSuits = useMemo(() => [...SUITS].sort(() => Math.random() - 0.5), [currentRound]);
@@ -84,16 +86,23 @@ const GamePlay = () => {
       const { data: mems } = await supabase.from("members").select("id, name, is_eliminated").eq("team_id", teamId);
       if (mems) setMembers(mems);
 
-      const { data: allRoundScores } = await supabase.from("round_scores").select("suit_chosen, score, round_number, current_q_index").eq("team_id", teamId).eq("game_id", gameId);
+      const { data: allRoundScores } = await supabase.from("round_scores").select("suit_chosen, score, round_number, current_q_index, active_member_id").eq("team_id", teamId).eq("game_id", gameId);
       if (allRoundScores) {
         const previousSuits = allRoundScores.filter(rs => rs.round_number !== (game?.current_round || 0) && rs.suit_chosen).map(rs => rs.suit_chosen!);
         setUsedSuits(previousSuits);
+
+        const playedIds = allRoundScores.filter(rs => rs.round_number !== (game?.current_round || 0) && rs.active_member_id).map(rs => rs.active_member_id!);
+        setPlayedMemberIds(playedIds);
+
         const currentRs = allRoundScores.find(rs => rs.round_number === (game?.current_round || 0));
-        if (currentRs?.suit_chosen) {
-          setSelectedSuit(currentRs.suit_chosen);
-          setSuitLocked(true);
-          setScore(currentRs.score);
-          setCurrentQ(currentRs.current_q_index || 0);
+        if (currentRs) {
+          if (currentRs.active_member_id) setActiveMemberId(currentRs.active_member_id);
+          if (currentRs.suit_chosen) {
+            setSelectedSuit(currentRs.suit_chosen);
+            setSuitLocked(true);
+            setScore(currentRs.score);
+            setCurrentQ(currentRs.current_q_index || 0);
+          }
         }
       }
     };
@@ -111,13 +120,14 @@ const GamePlay = () => {
         }
         if (["round1", "round2", "round3", "round4"].includes(g.status as string)) {
           setPreviousRoundsTime(prev => frozenTime !== null ? frozenTime : prev);
-          setSelectedSuit(null); setSuitLocked(false); setQuestions([]); setCurrentQ(0);
+          setSelectedSuit(null); setSuitLocked(false); setQuestions([]); setCurrentQ(0); setActiveMemberId(null);
           setScore(0); setAnswer(""); setShowResults(false); setRoundComplete(false); setFrozenTime(null);
-          supabase.from("round_scores").select("suit_chosen, round_number").eq("team_id", teamId!).eq("game_id", gameId!)
+          supabase.from("round_scores").select("suit_chosen, round_number, active_member_id").eq("team_id", teamId!).eq("game_id", gameId!)
             .then(({ data }) => {
               if (data) {
                 const newRound = g.current_round as number;
                 setUsedSuits(data.filter(rs => rs.round_number !== newRound && rs.suit_chosen).map(rs => rs.suit_chosen!));
+                setPlayedMemberIds(data.filter(rs => rs.round_number !== newRound && rs.active_member_id).map(rs => rs.active_member_id!));
               }
             });
         }
@@ -149,11 +159,19 @@ const GamePlay = () => {
     if (data) setLeaderboard(data);
   };
 
+  const selectOperative = async (memberId: string) => {
+    setActiveMemberId(memberId);
+    await supabase.from("round_scores").upsert(
+      { team_id: teamId!, game_id: gameId!, round_number: currentRound, active_member_id: memberId, score: 0 },
+      { onConflict: "team_id,game_id,round_number" }
+    );
+  };
+
   const selectSuit = async (suit: string) => {
-    if (suitLocked) return;
+    if (suitLocked || !activeMemberId) return;
     setSelectedSuit(suit);
     setSuitLocked(true);
-    await supabase.from("round_scores").upsert({ team_id: teamId!, game_id: gameId!, round_number: currentRound, suit_chosen: suit, score: 0 }, { onConflict: "team_id,game_id,round_number" });
+    await supabase.from("round_scores").upsert({ team_id: teamId!, game_id: gameId!, round_number: currentRound, suit_chosen: suit, active_member_id: activeMemberId }, { onConflict: "team_id,game_id,round_number" });
     const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("round_number", currentRound).eq("suit", suit).order("question_number");
     if (qs) { setQuestions(qs); setQuestionStartTime(Date.now()); setTotalAnswerTime(0); }
   };
@@ -336,8 +354,46 @@ const GamePlay = () => {
 
         {/* Card Selection Area - The Zero-G Engine */}
         <div className="relative min-h-[400px] flex items-center justify-center">
+
+          {/* Operative Selection Phase */}
+          {!activeMemberId && (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-2xl">
+              <Card className="glass-card border-primary">
+                <CardContent className="p-8 text-center space-y-8">
+                  <div>
+                    <h3 className="font-display text-2xl text-primary tracking-widest neon-text">SELECT OPERATIVE</h3>
+                    <p className="text-muted-foreground font-body mt-2">Choose the team member playing Round {currentRound}.<br />Operatives can only play one round per game.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {members.map(m => {
+                      const hasPlayed = playedMemberIds.includes(m.id);
+                      const isEliminated = m.is_eliminated;
+                      const disabled = hasPlayed || isEliminated;
+
+                      return (
+                        <Button
+                          key={m.id}
+                          onClick={() => selectOperative(m.id)}
+                          disabled={disabled}
+                          className={`h-16 font-display tracking-wider text-lg ${disabled ? 'bg-secondary/50 border-white/5 opacity-50' : 'bg-primary/10 hover:bg-primary/30 border-primary/50 text-white shadow-[0_0_15px_rgba(var(--primary),0.2)] hover:shadow-[0_0_25px_rgba(var(--primary),0.5)]'}`}
+                          variant="outline"
+                        >
+                          <Users className="w-5 h-5 mr-3" />
+                          {m.name}
+                          {hasPlayed && <span className="ml-auto text-xs font-mono text-muted-foreground">(PLAYED)</span>}
+                          {isEliminated && <span className="ml-auto text-xs font-mono text-destructive"><Skull className="w-4 h-4" /></span>}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
           {/* If no suit selected, show all cards floating */}
-          {!suitLocked && (
+          {activeMemberId && !suitLocked && (
             <motion.div
               layoutId="card-container"
               className="grid grid-cols-2 md:grid-cols-4 gap-6 w-full max-w-4xl"
@@ -360,7 +416,7 @@ const GamePlay = () => {
 
           {/* If suit selected, move selected card to center (conceptually) */}
           <AnimatePresence mode="wait">
-            {suitLocked && (
+            {activeMemberId && suitLocked && (
               <motion.div
                 key="round-content"
                 initial={{ opacity: 0, scale: 0.9, y: 50 }}

@@ -25,6 +25,7 @@ type Team = {
   total_time: number;
   round_scores: Record<number, number>;
   members: { id: string; name: string; is_eliminated: boolean; eliminated_round: number | null }[];
+  is_disqualified: boolean;
 };
 
 const ROUND_NAMES: Record<number, string> = { 1: "Entry Game", 2: "Mind Trap", 3: "Betrayal Stage", 4: "Final Showdown" };
@@ -70,7 +71,7 @@ const AdminDashboard = () => {
   }, [game?.id]);
 
   const fetchTeams = async (gameId: string) => {
-    const { data: teamsData } = await supabase.from("teams").select("id, name, total_score").eq("game_id", gameId);
+    const { data: teamsData } = await supabase.from("teams").select("id, name, total_score, is_disqualified").eq("game_id", gameId);
     if (!teamsData) return;
     const teamsWithMembers: Team[] = await Promise.all(
       teamsData.map(async (t) => {
@@ -126,6 +127,15 @@ const AdminDashboard = () => {
 
   const copyCode = () => {
     if (game) { navigator.clipboard.writeText(game.join_code); toast({ title: "Copied!" }); }
+  };
+
+  const unbanTeam = async (teamId: string) => {
+    const { error } = await supabase.from('teams').update({ is_disqualified: false }).eq('id', teamId);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Team Unbanned", description: "The atmospheric breach lockout has been removed." });
+    }
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); navigate("/"); };
@@ -227,10 +237,20 @@ const AdminDashboard = () => {
             {/* Teams */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {teams.map((team) => (
-                <Card key={team.id} className="glass-card">
+                <Card key={team.id} className={`glass-card ${team.is_disqualified ? 'border-destructive/50 shadow-[0_0_15px_rgba(220,38,38,0.3)]' : ''}`}>
                   <CardHeader className="pb-3">
                     <CardTitle className="font-display text-lg tracking-wider text-primary flex items-center justify-between">
-                      <span className="flex items-center gap-2"><Users className="h-4 w-4" /> {team.name}</span>
+                      <div className="flex flex-col">
+                        <span className={`flex items-center gap-2 ${team.is_disqualified ? 'text-destructive' : ''}`}>
+                          <Users className="h-4 w-4" /> {team.name}
+                        </span>
+                        {team.is_disqualified && (
+                          <div className="flex flex-col items-start gap-2 mt-2">
+                            <span className="text-xs text-destructive flex items-center font-mono uppercase tracking-widest"><Skull className="h-3 w-3 mr-1" /> Disqualified (Cheat Flag)</span>
+                            <Button size="sm" variant="outline" onClick={() => unbanTeam(team.id)} className="h-6 text-[10px] pb-5 pt-5 neon-border border-destructive text-destructive hover:bg-destructive hover:text-white font-display">REMOVE FLAG</Button>
+                          </div>
+                        )}
+                      </div>
                       <div className="text-right">
                         <span className="text-foreground text-sm block font-bold">{team.total_score} pts</span>
                         <div className="flex gap-1.5 justify-end mt-0.5">
