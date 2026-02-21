@@ -10,11 +10,12 @@ type RoundViewProps = {
     answer: string;
     setAnswer: (a: string) => void;
     submitAnswer: (a: string) => void;
+    isSubmitting: boolean;
     selectedSuit: any;
     isRound4?: boolean;
 };
 
-const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isRound4 }: RoundViewProps) => {
+const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, isRound4 }: RoundViewProps) => {
     if (!currentQuestion) return null;
 
     // Distinguish between Terminal Task (Bug Hunt) vs Design Task (Figma)
@@ -84,7 +85,7 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
 
                 <Button
                     onClick={() => submitAnswer(answer)}
-                    disabled={!answer.trim()}
+                    disabled={!answer.trim() || isSubmitting}
                     className="w-full font-mono font-bold bg-primary hover:bg-primary/80 text-black h-12 uppercase tracking-widest"
                 >
                     {isDesignTask ? "TRANSMIT DESIGN" : "DEPLOY FIX"}

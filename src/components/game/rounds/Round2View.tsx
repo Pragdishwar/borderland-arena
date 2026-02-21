@@ -10,10 +10,11 @@ type RoundViewProps = {
     answer: string;
     setAnswer: (a: string) => void;
     submitAnswer: (a: string) => void;
+    isSubmitting: boolean;
     selectedSuit: any;
 };
 
-const Round2View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, selectedSuit }: RoundViewProps) => {
+const Round2View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, selectedSuit }: RoundViewProps) => {
     if (!currentQuestion) return null;
 
     return (
@@ -59,7 +60,7 @@ const Round2View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
 
                 <Button
                     onClick={() => submitAnswer(answer)}
-                    disabled={!answer.trim()}
+                    disabled={!answer.trim() || isSubmitting}
                     className="w-full font-display tracking-widest bg-primary hover:bg-primary/80 text-black h-12"
                 >
                     <CheckCircle className="mr-2 h-4 w-4" /> COMPILE & SUBMIT

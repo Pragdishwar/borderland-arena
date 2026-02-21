@@ -60,6 +60,8 @@ const GamePlay = () => {
   const [frozenTime, setFrozenTime] = useState<number | null>(null);
   const [previousRoundsTime, setPreviousRoundsTime] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; total_score: number; is_disqualified: boolean }[]>([]);
 
   // Shuffle suits randomly per render
   const shuffledSuits = useMemo(() => [...SUITS].sort(() => Math.random() - 0.5), [currentRound]);
@@ -69,17 +71,30 @@ const GamePlay = () => {
 
     const fetchState = async () => {
       const { data: game } = await supabase.from("games").select("status, current_round, round_started_at").eq("id", gameId).single();
-      if (game) { setGameStatus(game.status); setCurrentRound(game.current_round); setRoundStartedAt(game.round_started_at); }
+      if (game) {
+        setGameStatus(game.status);
+        setCurrentRound(game.current_round);
+        setRoundStartedAt(game.round_started_at);
+
+        if (game.status === "between_rounds" || game.status === "finished") {
+          fetchLeaderboard();
+        }
+      }
 
       const { data: mems } = await supabase.from("members").select("id, name, is_eliminated").eq("team_id", teamId);
       if (mems) setMembers(mems);
 
-      const { data: allRoundScores } = await supabase.from("round_scores").select("suit_chosen, score, round_number").eq("team_id", teamId).eq("game_id", gameId);
+      const { data: allRoundScores } = await supabase.from("round_scores").select("suit_chosen, score, round_number, current_q_index").eq("team_id", teamId).eq("game_id", gameId);
       if (allRoundScores) {
         const previousSuits = allRoundScores.filter(rs => rs.round_number !== (game?.current_round || 0) && rs.suit_chosen).map(rs => rs.suit_chosen!);
         setUsedSuits(previousSuits);
         const currentRs = allRoundScores.find(rs => rs.round_number === (game?.current_round || 0));
-        if (currentRs?.suit_chosen) { setSelectedSuit(currentRs.suit_chosen); setSuitLocked(true); setScore(currentRs.score); }
+        if (currentRs?.suit_chosen) {
+          setSelectedSuit(currentRs.suit_chosen);
+          setSuitLocked(true);
+          setScore(currentRs.score);
+          setCurrentQ(currentRs.current_q_index || 0);
+        }
       }
     };
     fetchState();
@@ -90,7 +105,10 @@ const GamePlay = () => {
         setGameStatus(g.status as string);
         setCurrentRound(g.current_round as number);
         setRoundStartedAt(g.round_started_at as string | null);
-        if (g.status === "between_rounds" || g.status === "finished") setShowResults(true);
+        if (g.status === "between_rounds" || g.status === "finished") {
+          setShowResults(true);
+          fetchLeaderboard();
+        }
         if (["round1", "round2", "round3", "round4"].includes(g.status as string)) {
           setPreviousRoundsTime(prev => frozenTime !== null ? frozenTime : prev);
           setSelectedSuit(null); setSuitLocked(false); setQuestions([]); setCurrentQ(0);
@@ -121,6 +139,16 @@ const GamePlay = () => {
     return () => clearInterval(interval);
   }, [roundStartedAt, currentRound, roundComplete, previousRoundsTime]);
 
+  const fetchLeaderboard = async () => {
+    const { data } = await supabase
+      .from("teams")
+      .select("id, name, total_score, is_disqualified")
+      .eq("game_id", gameId)
+      .order("total_score", { ascending: false })
+      .limit(5);
+    if (data) setLeaderboard(data);
+  };
+
   const selectSuit = async (suit: string) => {
     if (suitLocked) return;
     setSelectedSuit(suit);
@@ -131,30 +159,49 @@ const GamePlay = () => {
   };
 
   const submitAnswer = async (submittedAnswer: string) => {
-    if (!questions[currentQ]) return;
+    if (!questions[currentQ] || isSubmitting) return;
+    setIsSubmitting(true);
 
-    // Allow overriding the answer from the view
-    const finalAnswer = submittedAnswer || answer;
-    const q = questions[currentQ];
-    const isCorrect = finalAnswer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
-    const earned = isCorrect ? q.points : 0;
-    const newScore = score + earned;
-    setScore(newScore);
-    const elapsed = Math.round((Date.now() - questionStartTime) / 1000);
-    const newTotalTime = totalAnswerTime + elapsed;
-    setTotalAnswerTime(newTotalTime);
+    try {
+      // Allow overriding the answer from the view
+      const finalAnswer = submittedAnswer || answer;
+      const q = questions[currentQ];
+      const isCorrect = finalAnswer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
+      const earned = isCorrect ? q.points : 0;
+      const newScore = score + earned;
+      const elapsed = Math.round((Date.now() - questionStartTime) / 1000);
+      const newTotalTime = totalAnswerTime + elapsed;
 
-    if (isCorrect) toast({ title: `+${q.points} points!`, description: `Correct! (${elapsed}s)` });
-    else toast({ title: "Wrong!", description: `Answer: ${q.correct_answer}`, variant: "destructive" });
+      setScore(newScore);
+      setTotalAnswerTime(newTotalTime);
 
-    await supabase.from("round_scores").update({ score: newScore, answer_time_seconds: newTotalTime }).eq("team_id", teamId!).eq("game_id", gameId!).eq("round_number", currentRound);
-    const { data: allScores } = await supabase.from("round_scores").select("score").eq("team_id", teamId!).eq("game_id", gameId!);
-    const totalScore = allScores?.reduce((acc, s) => acc + s.score, 0) || 0;
-    await supabase.from("teams").update({ total_score: totalScore }).eq("id", teamId!);
+      if (isCorrect) toast({ title: `+${q.points} points!`, description: `Correct! (${elapsed}s)` });
+      else toast({ title: "Wrong!", description: `Answer: ${q.correct_answer}`, variant: "destructive" });
 
-    setAnswer("");
-    if (currentQ + 1 < questions.length) { setCurrentQ(currentQ + 1); setQuestionStartTime(Date.now()); }
-    else { setRoundComplete(true); setFrozenTime(timeLeft); setShowResults(true); toast({ title: "Round complete!", description: `Score: ${newScore} | Time: ${timeLeft}s` }); }
+      const nextQIndex = currentQ + 1;
+      await supabase.from("round_scores").update({
+        score: newScore,
+        answer_time_seconds: newTotalTime,
+        current_q_index: nextQIndex
+      }).eq("team_id", teamId!).eq("game_id", gameId!).eq("round_number", currentRound);
+
+      const { data: allScores } = await supabase.from("round_scores").select("score").eq("team_id", teamId!).eq("game_id", gameId!);
+      const totalScore = allScores?.reduce((acc, s) => acc + s.score, 0) || 0;
+      await supabase.from("teams").update({ total_score: totalScore }).eq("id", teamId!);
+
+      setAnswer("");
+      if (nextQIndex < questions.length) {
+        setCurrentQ(nextQIndex);
+        setQuestionStartTime(Date.now());
+      } else {
+        setRoundComplete(true);
+        setFrozenTime(timeLeft);
+        setShowResults(true);
+        toast({ title: "Round complete!", description: `Score: ${newScore} | Time: ${timeLeft}s` });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Helper to render the correct view based on round
@@ -166,6 +213,7 @@ const GamePlay = () => {
       answer,
       setAnswer,
       submitAnswer,
+      isSubmitting,
       selectedSuit: SUITS.find(s => s.key === selectedSuit)
     };
 
@@ -209,7 +257,7 @@ const GamePlay = () => {
           <p className="text-muted-foreground font-body text-lg animate-pulse-glow">
             {currentRound < 4 ? `Waiting for admin to start Round ${currentRound + 1}...` : "Waiting for final results..."}
           </p>
-          <div className="flex flex-wrap gap-3 justify-center">
+          <div className="flex flex-wrap gap-3 justify-center mb-8">
             {members.map(m => (
               <div key={m.id} className={`glass-card px-4 py-2 rounded-lg ${m.is_eliminated ? "opacity-30 line-through" : ""}`}>
                 {m.is_eliminated && <Skull className="inline h-4 w-4 text-destructive mr-1" />}
@@ -217,6 +265,34 @@ const GamePlay = () => {
               </div>
             ))}
           </div>
+
+          {/* Leaderboard */}
+          {leaderboard.length > 0 && (
+            <div className="max-w-md mx-auto bg-black/40 border border-primary/20 rounded-xl p-6 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+              <h3 className="font-display text-xl text-primary mb-4 tracking-widest text-center">TOP RANKINGS</h3>
+              <div className="space-y-3">
+                {leaderboard.map((team, index) => (
+                  <div key={team.id} className={`flex items-center justify-between p-3 rounded bg-black/60 border ${team.id === teamId ? 'border-primary shadow-[0_0_10px_rgba(var(--primary),0.3)]' : 'border-white/5'} ${team.is_disqualified ? 'opacity-30' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`font-mono font-bold ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : index === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                        #{index + 1}
+                      </span>
+                      <span className={`font-body truncate max-w-[150px] ${team.id === teamId ? 'text-primary font-bold' : 'text-gray-300'}`}>
+                        {team.name} {team.id === teamId && "(You)"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {team.is_disqualified ? (
+                        <span className="text-destructive font-mono text-xs uppercase">Disqualified</span>
+                      ) : (
+                        <span className="font-mono font-bold text-white">{team.total_score} <span className="text-xs text-muted-foreground font-normal">pts</span></span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
     );
