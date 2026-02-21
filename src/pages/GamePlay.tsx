@@ -33,6 +33,7 @@ type Question = {
   correct_answer: string;
   points: number;
   image_url?: string | null;
+  question_number: number;
 };
 
 const GamePlay = () => {
@@ -125,7 +126,7 @@ const GamePlay = () => {
     setSelectedSuit(suit);
     setSuitLocked(true);
     await supabase.from("round_scores").upsert({ team_id: teamId!, game_id: gameId!, round_number: currentRound, suit_chosen: suit, score: 0 }, { onConflict: "team_id,game_id,round_number" });
-    const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url").eq("round_number", currentRound).eq("suit", suit);
+    const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("round_number", currentRound).eq("suit", suit).order("question_number");
     if (qs) { setQuestions(qs); setQuestionStartTime(Date.now()); setTotalAnswerTime(0); }
   };
 
