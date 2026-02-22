@@ -19,10 +19,10 @@ import Round3View from "@/components/game/rounds/Round3View";
 import Round4View from "@/components/game/rounds/Round4View";
 
 const SUITS = [
-  { key: "spades", symbol: "♠", name: "Logic Puzzles", color: "text-foreground" },
-  { key: "hearts", symbol: "♥", name: "Riddles & Patterns", color: "text-primary" },
-  { key: "diamonds", symbol: "♦", name: "Coding Challenges", color: "text-primary" },
-  { key: "clubs", symbol: "♣", name: "Tech Flow", color: "text-foreground" },
+  { key: "spades", symbol: "♠", name: "Spades", color: "text-foreground" },
+  { key: "hearts", symbol: "♥", name: "Hearts", color: "text-primary" },
+  { key: "diamonds", symbol: "♦", name: "Diamonds", color: "text-primary" },
+  { key: "clubs", symbol: "♣", name: "Clubs", color: "text-foreground" },
 ];
 
 type Question = {
