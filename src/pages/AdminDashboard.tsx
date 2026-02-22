@@ -203,6 +203,9 @@ const AdminDashboard = () => {
             )}
           </div>
           <div className="flex gap-4">
+            <Button onClick={createGame} className="bg-primary hover:bg-primary/80 font-display neon-border text-black">
+              <Plus className="mr-2 h-4 w-4" /> NEW LOBBY
+            </Button>
             <Button variant="ghost" onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
               Home
             </Button>
@@ -213,9 +216,11 @@ const AdminDashboard = () => {
         </div>
 
         {!game ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20">
-            <Button size="lg" onClick={createGame} className="font-display text-xl px-10 py-7 bg-primary hover:bg-primary/80 neon-border">
-              <Plus className="mr-2 h-6 w-6" /> CREATE GAME
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20 glass-card rounded-xl">
+            <h2 className="font-display text-2xl text-primary mb-4">NO ACTIVE LOBBY SELECTED</h2>
+            <p className="text-muted-foreground font-body mb-8">Select an existing game from the dropdown or construct a new instance.</p>
+            <Button size="lg" onClick={createGame} className="font-display text-xl px-10 py-7 bg-primary hover:bg-primary/80 neon-border text-black">
+              <Plus className="mr-2 h-6 w-6" /> INITIALIZE NEW GAME
             </Button>
           </motion.div>
         ) : (
