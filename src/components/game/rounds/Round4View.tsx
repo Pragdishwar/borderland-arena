@@ -2,25 +2,47 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle, Figma, Terminal as TerminalIcon } from "lucide-react";
+import { DiffEditor } from "@monaco-editor/react";
+import { executeCode } from "@/lib/executeCode";
+import { toast } from "@/hooks/use-toast";
+type QuestionType = {
+    id?: string;
+    question_text: string;
+    question_type: string;
+    options: string[] | null;
+    correct_answer: string;
+    points: number;
+    image_url?: string | null;
+    question_number: number;
+};
 
 type RoundViewProps = {
-    currentQuestion: any;
+    currentQuestion: QuestionType | null;
     currentQ: number;
     totalQuestions: number;
     answer: string;
     setAnswer: (a: string) => void;
     submitAnswer: (a: string) => void;
     isSubmitting: boolean;
-    selectedSuit: any;
+    selectedSuit: { name: string; symbol: string; color?: string } | null;
     isRound4?: boolean;
 };
 
 const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, isRound4 }: RoundViewProps) => {
     if (!currentQuestion) return null;
 
-    // Distinguish between Terminal Task (Bug Hunt) vs Design Task (Figma)
-    // Assuming checking 'suit' or question type. For now, if "design" in text, we show Figma view.
+    // Distinguish between Terminal Task (Bug Hunt) vs Design Task (Figma) vs Code Autopsy
     const isDesignTask = currentQuestion.question_text.toLowerCase().includes("design") || currentQuestion.question_text.toLowerCase().includes("figma");
+    const isCodeAutopsy = currentQuestion.question_text.toLowerCase().includes("autopsy") || isRound4; // Default to Autopsy for Round 4
+
+    // Scaffolding for Code Autopsy original failing code (could be fetched from question data in a real setup)
+    const originalFailingCode = `function calculateTotal(items) {
+  let total = 0;
+  for (let i = 1; i <= items.length; i++) { // Bug: out of bounds
+    total += items[i].price; 
+  }
+  return total;
+}`;
 
     return (
         <Card className="glass-card w-full animate-fade-in bg-black border border-primary">
@@ -55,7 +77,30 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                         </div>
                     )}
 
-                    {isDesignTask ? (
+                    {isCodeAutopsy && !isDesignTask ? (
+                        <div className="relative z-10 h-[400px] border border-primary/30 rounded overflow-hidden">
+                            <DiffEditor
+                                height="100%"
+                                language="javascript"
+                                theme="vs-dark"
+                                original={originalFailingCode}
+                                modified={answer || originalFailingCode}
+                                onMount={(editor) => {
+                                    // Listen to changes on the modified editor (right side)
+                                    editor.getModifiedEditor().onDidChangeModelContent(() => {
+                                        setAnswer(editor.getModifiedEditor().getValue());
+                                    });
+                                }}
+                                options={{
+                                    minimap: { enabled: false },
+                                    fontSize: 14,
+                                    fontFamily: "monospace",
+                                    renderSideBySide: true,
+                                    readOnly: false,
+                                }}
+                            />
+                        </div>
+                    ) : isDesignTask ? (
                         <div className="space-y-4 relative z-10">
                             <div className="border-2 border-dashed border-primary/40 rounded-xl p-8 text-center hover:bg-primary/5 transition-colors cursor-pointer group">
                                 <Figma className="w-10 h-10 mx-auto text-primary mb-3 group-hover:scale-110 transition-transform" />
@@ -84,11 +129,24 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                 </div>
 
                 <Button
-                    onClick={() => submitAnswer(answer)}
-                    disabled={!answer.trim() || isSubmitting}
+                    onClick={async () => {
+                        if (isCodeAutopsy && !isDesignTask) {
+                            try {
+                                const result = await executeCode(answer || originalFailingCode, 63);
+                                console.log("Piston Code Autopsy Result:", result);
+                                toast({ title: "Fix Deployed", description: "Piston execution logged to console." });
+                            } catch (err: unknown) {
+                                console.error(err);
+                                const e = err as Error;
+                                toast({ title: "Execution Failed", description: e.message, variant: "destructive" });
+                            }
+                        }
+                        submitAnswer(answer);
+                    }}
+                    disabled={(!answer.trim() && !isCodeAutopsy) || isSubmitting} // Autopsy might have default text
                     className="w-full font-mono font-bold bg-primary hover:bg-primary/80 text-black h-12 uppercase tracking-widest"
                 >
-                    {isDesignTask ? "TRANSMIT DESIGN" : "DEPLOY FIX"}
+                    {isCodeAutopsy && !isDesignTask ? "COMPILE & DEPLOY FIX" : isDesignTask ? "TRANSMIT DESIGN" : "DEPLOY FIX"}
                 </Button>
 
             </CardContent>
