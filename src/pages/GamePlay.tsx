@@ -65,6 +65,7 @@ const GamePlay = () => {
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [playedMemberIds, setPlayedMemberIds] = useState<string[]>([]);
   const isSubmittingRef = useRef(false);
+  const completedQRef = useRef<Set<number>>(new Set());
 
   // Shuffle suits randomly per render
   const shuffledSuits = useMemo(() => [...SUITS].sort(() => Math.random() - 0.5), [currentRound]);
@@ -100,6 +101,12 @@ const GamePlay = () => {
             setSuitLocked(true);
             setScore(currentRs.score);
             setCurrentQ(currentRs.current_q_index || 0);
+
+            // Fetch questions to resume game progress properly
+            const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("round_number", game.current_round).eq("suit", currentRs.suit_chosen).order("question_number");
+            if (qs) {
+              setQuestions(qs as Question[]);
+            }
           }
         }
       }
@@ -120,6 +127,7 @@ const GamePlay = () => {
           setPreviousRoundsTime(prev => frozenTime !== null ? frozenTime : prev);
           setSelectedSuit(null); setSuitLocked(false); setQuestions([]); setCurrentQ(0); setActiveMemberId(null);
           setScore(0); setAnswer(""); setShowResults(false); setRoundComplete(false); setFrozenTime(null);
+          completedQRef.current.clear(); // Reset submission lock for the new round
 
           const newRound = g.current_round as number;
           supabase.from("round_scores").select("suit_chosen, round_number, active_member_id").eq("team_id", teamId!).eq("game_id", gameId!)
@@ -193,9 +201,10 @@ const GamePlay = () => {
   };
 
   const submitAnswer = async (submittedAnswer: string) => {
-    if (!questions[currentQ] || isSubmitting || isSubmittingRef.current) return;
+    if (!questions[currentQ] || isSubmitting || isSubmittingRef.current || completedQRef.current.has(currentQ)) return;
 
     // Lock synchronously to prevent rapid-fire Enter spam
+    completedQRef.current.add(currentQ);
     isSubmittingRef.current = true;
     setIsSubmitting(true);
 
