@@ -112,9 +112,17 @@ const QuestionManager = ({ gameId }: Props) => {
         toast({ title: "Correct answer must match one option", variant: "destructive" });
         return;
       }
+    } else {
+      // Round 4 specific validation
+      const failingCode = form.options[0]?.trim();
+      const isAutopsy = form.question_text.toLowerCase().includes("autopsy");
+      if (isAutopsy && !failingCode) {
+        toast({ title: "Failing Code Required", description: "Code Autopsy tasks require the original failing code snippet.", variant: "destructive" });
+        return;
+      }
     }
 
-    const opts = isRound4 ? [] : form.options.filter(o => o.trim());
+    const opts = isRound4 ? [form.options[0]?.trim() || ""] : form.options.filter(o => o.trim());
     const payload = {
       question_text: form.question_type === "image" ? (form.question_text || "Image Question") : form.question_text,
       correct_answer: form.correct_answer,
@@ -327,7 +335,23 @@ const QuestionManager = ({ gameId }: Props) => {
             )}
 
             {isRound4 && (
-              <p className="text-xs text-primary font-body">⚡ Round 4: Hard mode — players must type the exact answer (no multiple choice)</p>
+              <div className="space-y-2">
+                <p className="text-xs text-primary font-body">⚡ Round 4: Hard mode — players must type the exact answer (no multiple choice)</p>
+                <div className="bg-primary/10 border border-primary/20 p-3 rounded-md space-y-2">
+                  <p className="text-xs text-primary font-mono">Code Autopsy Setup</p>
+                  <p className="text-xs text-muted-foreground font-body leading-tight">If "autopsy" is in the question text, the UI expects you to provide the original buggy code. Provide it below. If this is a Design/Terminal task, leave it blank.</p>
+                  <Textarea
+                    placeholder="// Enter the failing code snippet here..."
+                    value={form.options[0] || ""}
+                    onChange={e => {
+                      const newOpts = [...form.options];
+                      newOpts[0] = e.target.value;
+                      setForm(f => ({ ...f, options: newOpts }));
+                    }}
+                    className="bg-black/80 border-primary/20 font-mono text-sm h-32"
+                  />
+                </div>
+              </div>
             )}
 
             <Input placeholder={isRound4 ? "Correct answer" : "Correct answer (must match one option)"} value={form.correct_answer} onChange={e => setForm(f => ({ ...f, correct_answer: e.target.value }))}

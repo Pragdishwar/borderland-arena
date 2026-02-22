@@ -35,14 +35,8 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
     const isDesignTask = currentQuestion.question_text.toLowerCase().includes("design") || currentQuestion.question_text.toLowerCase().includes("figma");
     const isCodeAutopsy = currentQuestion.question_text.toLowerCase().includes("autopsy") || isRound4; // Default to Autopsy for Round 4
 
-    // Scaffolding for Code Autopsy original failing code (could be fetched from question data in a real setup)
-    const originalFailingCode = `function calculateTotal(items) {
-  let total = 0;
-  for (let i = 1; i <= items.length; i++) { // Bug: out of bounds
-    total += items[i].price; 
-  }
-  return total;
-}`;
+    // Retrieve original failing code setup in the Admin dashboard via options array
+    const originalFailingCode = (currentQuestion.options && currentQuestion.options.length > 0) ? currentQuestion.options[0] : "// No initial code provided.";
 
     return (
         <Card className="glass-card w-full animate-fade-in bg-black border border-primary">

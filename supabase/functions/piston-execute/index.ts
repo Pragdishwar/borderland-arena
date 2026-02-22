@@ -10,7 +10,8 @@ const getPistonLanguage = (judge0Id: number) => {
   switch (judge0Id) {
     case 63: return "javascript";
     case 71: return "python";
-    // Add more mappings as needed
+    case 62: return "java";
+    case 54: return "cpp";
     default: return "javascript";
   }
 };
