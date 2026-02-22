@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Trash2, Check, Image, X, Copy } from "lucide-react";
 
 const SUITS = ["spades", "hearts", "diamonds", "clubs"];
@@ -188,17 +189,19 @@ const QuestionManager = ({ gameId }: Props) => {
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/20 shadow-[0_0_15px_rgba(var(--primary),0.1)]">
             <p className="text-sm font-body text-primary uppercase tracking-widest font-bold">LOBBY IS EMPTY</p>
             <p className="text-xs text-muted-foreground mr-auto">Clone a template to begin:</p>
-            <select
-              className="bg-black/80 border border-primary/50 text-white font-mono text-sm px-3 py-2 rounded focus:outline-none focus:ring-1 focus:ring-primary shadow-[0_0_10px_rgba(var(--primary),0.2)]"
-              value={cloneSourceId}
-              onChange={e => setCloneSourceId(e.target.value)}
-            >
-              <option value="" className="bg-black text-white">-- Select Source --</option>
-              <option value="global" className="bg-black text-white">Default / Global Bank</option>
-              {games.filter(g => g.id !== gameId).map(g => (
-                <option key={g.id} value={g.id} className="bg-black text-white">Lobby: {g.join_code} ({g.status})</option>
-              ))}
-            </select>
+            <Select value={cloneSourceId} onValueChange={setCloneSourceId}>
+              <SelectTrigger className="w-[250px] bg-black/80 border-primary/50 text-white font-mono text-xs md:text-sm h-10 shadow-[0_0_10px_rgba(var(--primary),0.2)] neon-border">
+                <SelectValue placeholder="-- Select Source --" />
+              </SelectTrigger>
+              <SelectContent className="bg-black border-primary/50 text-white font-mono">
+                <SelectItem value="global" className="cursor-pointer focus:bg-primary/20 focus:text-primary">Default / Global Bank</SelectItem>
+                {games.filter(g => g.id !== gameId).map(g => (
+                  <SelectItem key={g.id} value={g.id} className="cursor-pointer focus:bg-primary/20 focus:text-primary">
+                    Lobby: {g.join_code} ({g.status})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button size="sm" onClick={handleClone} disabled={!cloneSourceId || isCloning} className="font-display bg-primary text-black hover:bg-primary/80 neon-border">
               <Copy className="w-4 h-4 mr-2" /> {isCloning ? "CLONING..." : "CLONE QUESTIONS"}
             </Button>

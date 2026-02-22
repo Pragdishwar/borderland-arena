@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { toast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Play, Pause, SkipForward, Plus, Users, Skull, Trophy, Copy, LogOut, Trash2 } from "lucide-react";
 import QuestionManager from "@/components/admin/QuestionManager";
 
@@ -208,22 +209,21 @@ const AdminDashboard = () => {
           <div className="flex items-center gap-4">
             <h1 className="font-display text-2xl md:text-3xl font-bold tracking-wider text-primary neon-text">ADMIN DASHBOARD</h1>
             {gamesList.length > 1 && (
-              <select
-                title="Select Game Lobby"
-                className="bg-black/80 border border-primary/50 text-white font-mono text-sm px-3 py-2 rounded focus:outline-none focus:ring-1 focus:ring-primary shadow-[0_0_10px_rgba(var(--primary),0.2)]"
-                value={game?.id || ""}
-                onChange={(e) => {
-                  const selected = gamesList.find(g => g.id === e.target.value);
-                  if (selected) {
-                    setGame(selected);
-                    fetchTeams(selected.id);
-                  }
-                }}
-              >
-                {gamesList.map(g => (
-                  <option key={g.id} value={g.id} className="bg-black text-white">Lobby: {g.join_code} ({g.status})</option>
-                ))}
-              </select>
+              <Select value={game?.id || ""} onValueChange={(value) => {
+                const selected = gamesList.find(g => g.id === value);
+                if (selected) { setGame(selected); fetchTeams(selected.id); }
+              }}>
+                <SelectTrigger className="w-[250px] bg-black/80 border-primary/50 text-white font-mono text-xs md:text-sm h-10 shadow-[0_0_10px_rgba(var(--primary),0.2)] neon-border">
+                  <SelectValue placeholder="Select Game Lobby" />
+                </SelectTrigger>
+                <SelectContent className="bg-black border-primary/50 text-white font-mono">
+                  {gamesList.map(g => (
+                    <SelectItem key={g.id} value={g.id} className="cursor-pointer focus:bg-primary/20 focus:text-primary">
+                      Lobby: {g.join_code} ({statusLabel(g.status).split(" ")[0]} {g.status})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
           <div className="flex gap-4">
