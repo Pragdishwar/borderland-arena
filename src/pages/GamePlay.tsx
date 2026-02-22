@@ -106,6 +106,10 @@ const GamePlay = () => {
             const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("round_number", game.current_round).eq("suit", currentRs.suit_chosen).order("question_number");
             if (qs) {
               setQuestions(qs as Question[]);
+              if ((currentRs.current_q_index || 0) >= qs.length && qs.length > 0) {
+                setShowResults(true);
+                setRoundComplete(true);
+              }
             }
           }
         }
@@ -326,7 +330,7 @@ const GamePlay = () => {
     );
   }
 
-  if (gameStatus === "between_rounds" || (showResults && !isRoundActive)) {
+  if (gameStatus === "between_rounds" || showResults) {
     return (
       <div className="min-h-screen arena-bg flex items-center justify-center px-4">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center space-y-6">
