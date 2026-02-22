@@ -83,9 +83,8 @@ const AtmosphericBreach = ({ active, teamId, gameId }: AtmosphericBreachProps) =
             // The plan mentioned creating this RPC or column. 
             // For this implementation, I will attempt to call the RPC.
 
-            await supabase.rpc('flag_team_disqualification', {
-                _team_id: teamId,
-                _game_id: gameId
+            await supabase.rpc('trigger_atmospheric_breach', {
+                _team_id: teamId
             });
 
             setDisqualified(true);
