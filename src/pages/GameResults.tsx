@@ -33,9 +33,10 @@ const GameResults = () => {
           const { data: mems } = await supabase.from("members").select("id, name, is_eliminated").eq("team_id", t.id);
           const { data: scores } = await supabase.from("round_scores").select("round_number, score, answer_time_seconds").eq("team_id", t.id).eq("game_id", gameId!);
           const totalTime = scores?.reduce((acc, s) => acc + (s.answer_time_seconds || 0), 0) || 0;
+          const totalScore = scores?.reduce((acc, s) => acc + (s.score || 0), 0) || 0;
           const roundScores: Record<number, number> = {};
           scores?.forEach((s) => { roundScores[s.round_number] = s.score; });
-          return { ...t, total_time: totalTime, round_scores: roundScores, members: mems || [] };
+          return { ...t, total_score: totalScore, total_time: totalTime, round_scores: roundScores, members: mems || [] };
         })
       );
       // Sort by score desc, then by time asc (faster wins tiebreaker)
