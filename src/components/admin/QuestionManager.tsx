@@ -95,6 +95,7 @@ const QuestionManager = ({ gameId }: Props) => {
     setUploading(false);
   };
 
+  const isRound3 = activeRound === 3;
   const isRound4 = activeRound === 4;
 
   const getQuestionForSlot = (slot: number) => questions.find(q => q.question_number === slot);
@@ -102,7 +103,7 @@ const QuestionManager = ({ gameId }: Props) => {
   const saveQuestion = async () => {
     if (editingSlot === null) return;
 
-    if (!isRound4) {
+    if (!isRound3 && !isRound4) {
       const opts = form.options.filter(o => o.trim());
       if (opts.length !== 4) {
         toast({ title: "4 options required", description: "Please fill all four options.", variant: "destructive" });
@@ -112,7 +113,7 @@ const QuestionManager = ({ gameId }: Props) => {
         toast({ title: "Correct answer must match one option", variant: "destructive" });
         return;
       }
-    } else {
+    } else if (isRound4) {
       // Round 4 specific validation
       const failingCode = form.options[0]?.trim();
       const isAutopsy = form.question_text.toLowerCase().includes("autopsy");
@@ -122,7 +123,13 @@ const QuestionManager = ({ gameId }: Props) => {
       }
     }
 
-    const opts = isRound4 ? [form.options[0]?.trim() || ""] : form.options.filter(o => o.trim());
+    let opts: string[] | null = null;
+    if (isRound4) {
+      opts = [form.options[0]?.trim() || ""];
+    } else if (!isRound3) {
+      opts = form.options.filter(o => o.trim());
+    }
+
     const payload = {
       question_text: form.question_type === "image" ? (form.question_text || "Image Question") : form.question_text,
       correct_answer: form.correct_answer,
@@ -316,8 +323,8 @@ const QuestionManager = ({ gameId }: Props) => {
               </div>
             )}
 
-            {/* Options - only for rounds 1-3 */}
-            {!isRound4 && (
+            {/* Options - only for rounds 1-2 */}
+            {(!isRound3 && !isRound4) && (
               <>
                 <p className="text-xs text-muted-foreground font-body">4 Options (one must be the correct answer)</p>
                 <div className="grid grid-cols-1 gap-2">
@@ -332,6 +339,10 @@ const QuestionManager = ({ gameId }: Props) => {
                   ))}
                 </div>
               </>
+            )}
+
+            {isRound3 && (
+              <p className="text-xs text-primary font-body">⚡ Round 3: The Compiler — Operatives will write code in a Monaco editor.</p>
             )}
 
             {isRound4 && (
@@ -354,11 +365,11 @@ const QuestionManager = ({ gameId }: Props) => {
               </div>
             )}
 
-            <Input placeholder={isRound4 ? "Correct answer" : "Correct answer (must match one option)"} value={form.correct_answer} onChange={e => setForm(f => ({ ...f, correct_answer: e.target.value }))}
+            <Input placeholder={isRound3 || isRound4 ? "Correct answer (optional logic test/reference)" : "Correct answer (must match one option)"} value={form.correct_answer} onChange={e => setForm(f => ({ ...f, correct_answer: e.target.value }))}
               className="bg-secondary border-primary/20" />
 
             <div className="flex gap-2">
-              <Button onClick={saveQuestion} disabled={form.question_type === "text" ? !form.question_text || !form.correct_answer : !form.image_url || !form.correct_answer} className="bg-primary hover:bg-primary/80 font-display">
+              <Button onClick={saveQuestion} disabled={form.question_type === "text" ? !form.question_text || (!isRound3 && !isRound4 && !form.correct_answer) : !form.image_url || (!isRound3 && !isRound4 && !form.correct_answer)} className="bg-primary hover:bg-primary/80 font-display">
                 <Check className="mr-2 h-4 w-4" /> {editingId ? "UPDATE" : "SAVE"}
               </Button>
               <Button variant="outline" onClick={resetForm} className="border-primary/20">Cancel</Button>
