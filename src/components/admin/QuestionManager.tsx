@@ -95,6 +95,8 @@ const QuestionManager = ({ gameId }: Props) => {
     setUploading(false);
   };
 
+  const isRound1 = activeRound === 1;
+  const isRound2 = activeRound === 2;
   const isRound3 = activeRound === 3;
   const isRound4 = activeRound === 4;
 
@@ -103,7 +105,7 @@ const QuestionManager = ({ gameId }: Props) => {
   const saveQuestion = async () => {
     if (editingSlot === null) return;
 
-    if (!isRound3 && !isRound4) {
+    if (isRound1) {
       const opts = form.options.filter(o => o.trim());
       if (opts.length !== 4) {
         toast({ title: "4 options required", description: "Please fill all four options.", variant: "destructive" });
@@ -126,7 +128,7 @@ const QuestionManager = ({ gameId }: Props) => {
     let opts: string[] | null = null;
     if (isRound4) {
       opts = [form.options[0]?.trim() || ""];
-    } else if (!isRound3) {
+    } else if (isRound1) {
       opts = form.options.filter(o => o.trim());
     }
 
@@ -323,8 +325,8 @@ const QuestionManager = ({ gameId }: Props) => {
               </div>
             )}
 
-            {/* Options - only for rounds 1-2 */}
-            {(!isRound3 && !isRound4) && (
+            {/* Options - only for round 1 */}
+            {isRound1 && (
               <>
                 <p className="text-xs text-muted-foreground font-body">4 Options (one must be the correct answer)</p>
                 <div className="grid grid-cols-1 gap-2">
@@ -339,6 +341,10 @@ const QuestionManager = ({ gameId }: Props) => {
                   ))}
                 </div>
               </>
+            )}
+
+            {isRound2 && (
+              <p className="text-xs text-primary font-body">⚡ Round 2: Execution Trace — Operatives will write decrypted logic in a text area.</p>
             )}
 
             {isRound3 && (
@@ -365,7 +371,7 @@ const QuestionManager = ({ gameId }: Props) => {
               </div>
             )}
 
-            <Input placeholder={isRound3 || isRound4 ? "Correct answer (optional logic test/reference)" : "Correct answer (must match one option)"} value={form.correct_answer} onChange={e => setForm(f => ({ ...f, correct_answer: e.target.value }))}
+            <Input placeholder={isRound3 || isRound4 ? "Correct answer (optional logic test/reference)" : "Exact correct answer text"} value={form.correct_answer} onChange={e => setForm(f => ({ ...f, correct_answer: e.target.value }))}
               className="bg-secondary border-primary/20" />
 
             <div className="flex gap-2">
