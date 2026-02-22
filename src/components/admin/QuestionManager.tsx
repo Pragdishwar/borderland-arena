@@ -43,10 +43,15 @@ const QuestionManager = ({ gameId }: Props) => {
 
   const fetchQuestions = async () => {
     if (!gameId) return;
-    const { data } = await supabase.from("questions").select("*").eq("game_id", gameId).eq("round_number", activeRound).eq("suit", activeSuit).order("question_number");
+
+    let query = supabase.from("questions").select("*").eq("round_number", activeRound).eq("suit", activeSuit).order("question_number");
+    if (gameId === "global") { query = query.is("game_id", null); } else { query = query.eq("game_id", gameId); }
+    const { data } = await query;
     if (data) setQuestions(data as Question[]);
 
-    const { count } = await supabase.from("questions").select("*", { count: "exact", head: true }).eq("game_id", gameId);
+    let countQuery = supabase.from("questions").select("*", { count: "exact", head: true });
+    if (gameId === "global") { countQuery = countQuery.is("game_id", null); } else { countQuery = countQuery.eq("game_id", gameId); }
+    const { count } = await countQuery;
     setTotalQuestions(count || 0);
   };
 
@@ -120,7 +125,7 @@ const QuestionManager = ({ gameId }: Props) => {
       suit: activeSuit,
       image_url: form.question_type === "image" ? (form.image_url || null) : null,
       question_number: editingSlot,
-      game_id: gameId,
+      game_id: gameId === "global" ? null : gameId,
     };
 
     if (editingId) {
@@ -181,11 +186,13 @@ const QuestionManager = ({ gameId }: Props) => {
   return (
     <Card className="glass-card">
       <CardHeader>
-        <CardTitle className="font-display text-lg text-primary tracking-wider">QUESTION MANAGER</CardTitle>
+        <CardTitle className="font-display text-lg text-primary tracking-wider">
+          {gameId === "global" ? "GLOBAL QUESTION BANK (DEFAULT TEMPLATE)" : "QUESTION MANAGER"}
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
 
-        {totalQuestions === 0 && (
+        {totalQuestions === 0 && gameId !== "global" && (
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/20 shadow-[0_0_15px_rgba(var(--primary),0.1)]">
             <p className="text-sm font-body text-primary uppercase tracking-widest font-bold">LOBBY IS EMPTY</p>
             <p className="text-xs text-muted-foreground mr-auto">Clone a template to begin:</p>

@@ -240,13 +240,19 @@ const AdminDashboard = () => {
         </div>
 
         {!game ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20 glass-card rounded-xl">
-            <h2 className="font-display text-2xl text-primary mb-4">NO ACTIVE LOBBY SELECTED</h2>
-            <p className="text-muted-foreground font-body mb-8">Select an existing game from the dropdown or construct a new instance.</p>
-            <Button size="lg" onClick={createGame} className="font-display text-xl px-10 py-7 bg-primary hover:bg-primary/80 neon-border text-black">
-              <Plus className="mr-2 h-6 w-6" /> INITIALIZE NEW GAME
-            </Button>
-          </motion.div>
+          <div className="space-y-6 flex flex-col items-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20 glass-card rounded-xl w-full">
+              <h2 className="font-display text-2xl text-primary mb-4">NO ACTIVE LOBBY SELECTED</h2>
+              <p className="text-muted-foreground font-body mb-8">Select an existing game from the dropdown, construct a new instance, or edit the Global Bank below.</p>
+              <Button size="lg" onClick={createGame} className="font-display text-xl px-10 py-7 bg-primary hover:bg-primary/80 neon-border text-black">
+                <Plus className="mr-2 h-6 w-6" /> INITIALIZE NEW GAME
+              </Button>
+            </motion.div>
+
+            <div className="w-full">
+              <QuestionManager gameId="global" />
+            </div>
+          </div>
         ) : (
           <>
             {/* Game Info */}
