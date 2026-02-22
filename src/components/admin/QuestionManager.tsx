@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Pencil, Trash2, Check, Image, X } from "lucide-react";
+import { Pencil, Trash2, Check, Image, X, Copy } from "lucide-react";
 
 const SUITS = ["spades", "hearts", "diamonds", "clubs"];
 const SUIT_LABELS: Record<string, string> = { spades: "♠ Spades", hearts: "♥ Hearts", diamonds: "♦ Diamonds", clubs: "♣ Clubs" };
@@ -34,14 +34,49 @@ const QuestionManager = ({ gameId }: Props) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ question_text: "", correct_answer: "", points: 10, question_type: "text", options: ["", "", "", ""] as string[], image_url: "" as string });
   const [uploading, setUploading] = useState(false);
+  const [games, setGames] = useState<any[]>([]);
+  const [cloneSourceId, setCloneSourceId] = useState("");
+  const [isCloning, setIsCloning] = useState(false);
+  const [totalQuestions, setTotalQuestions] = useState(0);
   const formRef = useRef<HTMLDivElement>(null);
 
   const fetchQuestions = async () => {
-    const { data } = await supabase.from("questions").select("*").eq("round_number", activeRound).eq("suit", activeSuit).order("question_number");
+    if (!gameId) return;
+    const { data } = await supabase.from("questions").select("*").eq("game_id", gameId).eq("round_number", activeRound).eq("suit", activeSuit).order("question_number");
     if (data) setQuestions(data as Question[]);
+
+    const { count } = await supabase.from("questions").select("*", { count: "exact", head: true }).eq("game_id", gameId);
+    setTotalQuestions(count || 0);
   };
 
-  useEffect(() => { fetchQuestions(); }, [activeRound, activeSuit]);
+  useEffect(() => { fetchQuestions(); }, [activeRound, activeSuit, gameId]);
+
+  useEffect(() => {
+    const fetchG = async () => {
+      const { data } = await supabase.from("games").select("id, join_code, status").order("created_at", { ascending: false });
+      if (data) setGames(data);
+    };
+    fetchG();
+  }, []);
+
+  const handleClone = async () => {
+    if (!gameId || !cloneSourceId) return;
+    if (!window.confirm("Clone all 50 questions from the selected source into this lobby?")) return;
+
+    setIsCloning(true);
+    const { error } = await supabase.rpc("clone_game_questions", {
+      _source_game_id: cloneSourceId === "global" ? null : cloneSourceId,
+      _target_game_id: gameId
+    });
+
+    if (error) {
+      toast({ title: "Clone Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Questions Cloned Successfully!" });
+      fetchQuestions();
+    }
+    setIsCloning(false);
+  };
 
   const handleUpload = async (file: File) => {
     setUploading(true);
@@ -84,6 +119,7 @@ const QuestionManager = ({ gameId }: Props) => {
       suit: activeSuit,
       image_url: form.question_type === "image" ? (form.image_url || null) : null,
       question_number: editingSlot,
+      game_id: gameId,
     };
 
     if (editingId) {
@@ -147,6 +183,27 @@ const QuestionManager = ({ gameId }: Props) => {
         <CardTitle className="font-display text-lg text-primary tracking-wider">QUESTION MANAGER</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+
+        {totalQuestions === 0 && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-lg bg-primary/10 border border-primary/20 shadow-[0_0_15px_rgba(var(--primary),0.1)]">
+            <p className="text-sm font-body text-primary uppercase tracking-widest font-bold">LOBBY IS EMPTY</p>
+            <p className="text-xs text-muted-foreground mr-auto">Clone a template to begin:</p>
+            <select
+              className="bg-black/80 border border-primary/50 text-white font-mono text-sm px-3 py-2 rounded focus:outline-none focus:ring-1 focus:ring-primary shadow-[0_0_10px_rgba(var(--primary),0.2)]"
+              value={cloneSourceId}
+              onChange={e => setCloneSourceId(e.target.value)}
+            >
+              <option value="" className="bg-black text-white">-- Select Source --</option>
+              <option value="global" className="bg-black text-white">Default / Global Bank</option>
+              {games.filter(g => g.id !== gameId).map(g => (
+                <option key={g.id} value={g.id} className="bg-black text-white">Lobby: {g.join_code} ({g.status})</option>
+              ))}
+            </select>
+            <Button size="sm" onClick={handleClone} disabled={!cloneSourceId || isCloning} className="font-display bg-primary text-black hover:bg-primary/80 neon-border">
+              <Copy className="w-4 h-4 mr-2" /> {isCloning ? "CLONING..." : "CLONE QUESTIONS"}
+            </Button>
+          </div>
+        )}
         {/* Round tabs */}
         <div className="flex gap-2 flex-wrap">
           {[1, 2, 3, 4].map(r => (

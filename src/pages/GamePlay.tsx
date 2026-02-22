@@ -103,7 +103,7 @@ const GamePlay = () => {
             setCurrentQ(currentRs.current_q_index || 0);
 
             // Fetch questions to resume game progress properly
-            const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("round_number", game.current_round).eq("suit", currentRs.suit_chosen).order("question_number");
+            const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("game_id", gameId).eq("round_number", game.current_round).eq("suit", currentRs.suit_chosen).order("question_number");
             if (qs) {
               setQuestions(qs as Question[]);
               if ((currentRs.current_q_index || 0) >= qs.length && qs.length > 0) {
@@ -200,7 +200,7 @@ const GamePlay = () => {
     setSelectedSuit(suit);
     setSuitLocked(true);
     await supabase.from("round_scores").upsert({ team_id: teamId!, game_id: gameId!, round_number: currentRound, suit_chosen: suit, active_member_id: activeMemberId }, { onConflict: "team_id,game_id,round_number" });
-    const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("round_number", currentRound).eq("suit", suit).order("question_number");
+    const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("game_id", gameId).eq("round_number", currentRound).eq("suit", suit).order("question_number");
     if (qs) { setQuestions(qs as Question[]); setQuestionStartTime(Date.now()); setTotalAnswerTime(0); }
   };
 
