@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { toast } from "@/hooks/use-toast";
-import { Play, Pause, SkipForward, Plus, Users, Skull, Trophy, Copy, LogOut } from "lucide-react";
+import { Play, Pause, SkipForward, Plus, Users, Skull, Trophy, Copy, LogOut, Trash2 } from "lucide-react";
 import QuestionManager from "@/components/admin/QuestionManager";
 
 type Game = {
@@ -39,21 +39,28 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [gamesList, setGamesList] = useState<Game[]>([]);
 
+  const fetchGames = async () => {
+    const { data: games } = await supabase
+      .from("games")
+      .select("*")
+      .neq("status", "finished")
+      .order("created_at", { ascending: false });
+
+    if (games && games.length > 0) {
+      setGamesList(games);
+    }
+    return games;
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate("/admin/login"); return; }
       setUser(user);
 
-      // Fetch the latest active game (now shared across all admins)
-      const { data: games } = await supabase
-        .from("games")
-        .select("*")
-        .neq('status', 'finished') // Optional: Prefer active games? Or just latest? Plan said latest.
-        .order("created_at", { ascending: false });
-
-      if (games && games.length > 0) {
-        setGamesList(games);
+      // Fetch the latest active games
+      const games = await fetchGames();
+      if (games && games?.length > 0) {
         setGame(games[0]);
         await fetchTeams(games[0].id);
       }
@@ -114,6 +121,7 @@ const AdminDashboard = () => {
       setLoading(false);
       return;
     }
+    await fetchGames();
     setGame(data);
     toast({ title: "Game created!", description: `Code: ${code}` });
     setLoading(false);
@@ -134,6 +142,22 @@ const AdminDashboard = () => {
   const finishGame = async () => {
     if (!game) return;
     await supabase.from("games").update({ status: "finished" }).eq("id", game.id);
+  };
+
+  const deleteGame = async () => {
+    if (!game) return;
+    if (!window.confirm("Are you sure you want to PERMANENTLY delete this game lobby, its teams, and all score data? This cannot be undone.")) return;
+    setLoading(true);
+    const { error } = await supabase.from("games").delete().eq("id", game.id);
+    if (error) {
+      toast({ title: "Deletion Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Lobby Deleted", description: "All database records have been securely erased." });
+      setGame(null);
+      setTeams([]);
+      await fetchGames();
+    }
+    setLoading(false);
   };
 
   const copyCode = () => {
@@ -271,8 +295,12 @@ const AdminDashboard = () => {
                   <Button onClick={finishGame} className="font-display bg-primary hover:bg-primary/80 neon-border"><Trophy className="mr-2 h-4 w-4" /> FINISH GAME</Button>
                 )}
                 {game.status === "finished" && (
-                  <Button onClick={() => { setGame(null); setTeams([]); }} className="font-display bg-primary hover:bg-primary/80 neon-border"><Plus className="mr-2 h-4 w-4" /> CREATE NEW GAME</Button>
+                  <Button onClick={() => { setGame(null); setTeams([]); }} className="font-display bg-primary hover:bg-primary/80 neon-border text-black"><Plus className="mr-2 h-4 w-4" /> CREATE NEW GAME</Button>
                 )}
+                {/* Global Delete Button */}
+                <Button onClick={deleteGame} variant="destructive" className="font-display neon-border shadow-[0_0_10px_rgba(220,38,38,0.5)]">
+                  <Trash2 className="mr-2 h-4 w-4" /> DELETE LOBBY
+                </Button>
               </CardContent>
             </Card>
 
