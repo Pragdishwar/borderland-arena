@@ -208,15 +208,22 @@ const AdminDashboard = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h1 className="font-display text-2xl md:text-3xl font-bold tracking-wider text-primary neon-text">ADMIN DASHBOARD</h1>
-            {gamesList.length > 1 && (
-              <Select value={game?.id || ""} onValueChange={(value) => {
-                const selected = gamesList.find(g => g.id === value);
-                if (selected) { setGame(selected); fetchTeams(selected.id); }
+            {gamesList.length > 0 && (
+              <Select value={game?.id || "global"} onValueChange={(value) => {
+                if (value === "global") {
+                  setGame(null);
+                } else {
+                  const selected = gamesList.find(g => g.id === value);
+                  if (selected) { setGame(selected); fetchTeams(selected.id); }
+                }
               }}>
                 <SelectTrigger className="w-[250px] bg-black/80 border-primary/50 text-white font-mono text-xs md:text-sm h-10 shadow-[0_0_10px_rgba(var(--primary),0.2)] neon-border">
                   <SelectValue placeholder="Select Game Lobby" />
                 </SelectTrigger>
                 <SelectContent className="bg-black border-primary/50 text-white font-mono">
+                  <SelectItem value="global" className="cursor-pointer focus:bg-primary/20 focus:text-primary text-muted-foreground italic">
+                    -- Global Bank (Templates) --
+                  </SelectItem>
                   {gamesList.map(g => (
                     <SelectItem key={g.id} value={g.id} className="cursor-pointer focus:bg-primary/20 focus:text-primary">
                       Lobby: {g.join_code} ({statusLabel(g.status).split(" ")[0]} {g.status})
