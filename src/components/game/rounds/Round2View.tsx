@@ -2,16 +2,26 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea"; // Assuming Textarea exists or using basic HTML
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle, Code } from "lucide-react";
+type QuestionType = {
+    id?: string;
+    question_text: string;
+    question_type: string;
+    options: string[] | null;
+    correct_answer: string;
+    points: number;
+    image_url?: string | null;
+    question_number: number;
+};
 
 type RoundViewProps = {
-    currentQuestion: any;
+    currentQuestion: QuestionType | null;
     currentQ: number;
     totalQuestions: number;
     answer: string;
     setAnswer: (a: string) => void;
     submitAnswer: (a: string) => void;
     isSubmitting: boolean;
-    selectedSuit: any;
+    selectedSuit: { name: string; symbol: string; color?: string } | null;
 };
 
 const Round2View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, selectedSuit }: RoundViewProps) => {

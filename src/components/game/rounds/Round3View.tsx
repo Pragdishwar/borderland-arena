@@ -1,16 +1,29 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle, Terminal } from "lucide-react";
+import Editor from "@monaco-editor/react";
+import { executeCode } from "@/lib/executeCode";
+import { toast } from "@/hooks/use-toast";
+type QuestionType = {
+    id?: string;
+    question_text: string;
+    question_type: string;
+    options: string[] | null;
+    correct_answer: string;
+    points: number;
+    image_url?: string | null;
+    question_number: number;
+};
 
 type RoundViewProps = {
-    currentQuestion: any;
+    currentQuestion: QuestionType | null;
     currentQ: number;
     totalQuestions: number;
     answer: string;
     setAnswer: (a: string) => void;
     submitAnswer: (a: string) => void;
     isSubmitting: boolean;
-    selectedSuit: any;
+    selectedSuit: { name: string; symbol: string; color?: string } | null;
 };
 
 const Round3View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, selectedSuit }: RoundViewProps) => {
@@ -46,21 +59,22 @@ const Round3View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                         </div>
                     </div>
 
-                    {/* Right Box: Code Editor (Simulated) */}
-                    <div className="flex-1 bg-[#1e1e1e] flex flex-col relative">
-                        <div className="absolute top-0 bottom-0 left-0 w-12 bg-[#1e1e1e] border-r border-[#333] flex flex-col items-end py-4 px-2 select-none">
-                            {/* Line numbers */}
-                            {Array.from({ length: 20 }).map((_, i) => (
-                                <span key={i} className="text-[#6e7681] font-mono text-xs leading-6">{i + 1}</span>
-                            ))}
-                        </div>
-
-                        <textarea
+                    {/* Right Box: Code Editor (Monaco) */}
+                    <div className="flex-1 bg-[#1e1e1e] flex flex-col relative w-full h-full min-h-[400px]">
+                        <Editor
+                            height="100%"
+                            defaultLanguage="javascript"
+                            theme="vs-dark"
                             value={answer}
-                            onChange={e => setAnswer(e.target.value)}
-                            placeholder="// Write your solution here..."
-                            className="flex-1 bg-transparent text-white font-mono text-sm leading-6 p-4 pl-4 ml-12 border-none resize-none focus:ring-0 focus:outline-none"
-                            spellCheck={false}
+                            onChange={(value) => setAnswer(value || "")}
+                            options={{
+                                minimap: { enabled: false },
+                                fontSize: 14,
+                                fontFamily: "monospace",
+                                lineNumbers: "on",
+                                scrollBeyondLastLine: false,
+                                automaticLayout: true,
+                            }}
                         />
                     </div>
                 </div>
@@ -68,12 +82,23 @@ const Round3View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                 {/* Footer Actions */}
                 <div className="bg-[#007acc] p-2 flex justify-end items-center">
                     <Button
-                        onClick={() => submitAnswer(answer)}
+                        onClick={async () => {
+                            try {
+                                const result = await executeCode(answer, 63); // 63 is typical ID mapped to JS
+                                console.log("Piston Execution Result:", result);
+                                toast({ title: "Compilation Attempted", description: "Piston execution logged to console." });
+                            } catch (err: unknown) {
+                                console.error(err);
+                                const e = err as Error;
+                                toast({ title: "Compilation Failed", description: e.message, variant: "destructive" });
+                            }
+                            submitAnswer(answer);
+                        }}
                         disabled={!answer.trim() || isSubmitting}
                         variant="ghost"
                         className="text-white hover:bg-white/10 font-mono text-xs h-8"
                     >
-                        <CheckCircle className="mr-2 h-3 w-3" /> COMMIT CHANGES
+                        <CheckCircle className="mr-2 h-3 w-3" /> COMPILE & SUBMIT
                     </Button>
                 </div>
             </CardContent>
