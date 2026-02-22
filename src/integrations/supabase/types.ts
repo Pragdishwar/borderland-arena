@@ -292,6 +292,12 @@ export type Database = {
         }
         Returns: void
       }
+      trigger_atmospheric_breach: {
+        Args: {
+          _team_id: string
+        }
+        Returns: void
+      }
     }
     Enums: {
       app_role: "admin" | "user"

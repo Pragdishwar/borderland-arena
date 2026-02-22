@@ -68,6 +68,7 @@ const AdminDashboard = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "games", filter: `id=eq.${game.id}` }, (payload) => { if (payload.new) setGame(payload.new as Game); })
       .on("postgres_changes", { event: "*", schema: "public", table: "teams", filter: `game_id=eq.${game.id}` }, () => { fetchTeams(game.id); })
       .on("postgres_changes", { event: "*", schema: "public", table: "members" }, () => { fetchTeams(game.id); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "round_scores", filter: `game_id=eq.${game.id}` }, () => { fetchTeams(game.id); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [game?.id]);
@@ -145,6 +146,15 @@ const AdminDashboard = () => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Team Unbanned", description: "The atmospheric breach lockout has been removed." });
+    }
+  };
+
+  const banTeam = async (teamId: string) => {
+    const { error } = await supabase.rpc('trigger_atmospheric_breach', { _team_id: teamId });
+    if (error) {
+      toast({ title: "Error tracking violation", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Violation Logged", description: "Team has been struck and disabled." });
     }
   };
 
@@ -287,10 +297,14 @@ const AdminDashboard = () => {
                                 WARNINGS: {team.ban_count}
                               </span>
                             )}
-                            {team.is_disqualified && (
+                            {team.is_disqualified ? (
                               <div className="flex flex-col items-start gap-2 mt-2">
                                 <span className="text-xs text-destructive flex items-center font-mono uppercase tracking-widest"><Skull className="h-3 w-3 mr-1" /> Disqualified (Cheat Flag)</span>
                                 <Button size="sm" variant="outline" onClick={() => unbanTeam(team.id)} className="h-6 text-[10px] pb-5 pt-5 neon-border border-destructive text-destructive hover:bg-destructive hover:text-white font-display">REMOVE FLAG</Button>
+                              </div>
+                            ) : (
+                              <div className="mt-2">
+                                <Button size="sm" variant="outline" onClick={() => banTeam(team.id)} className="h-6 text-[10px] pb-4 pt-4 border-destructive/50 text-destructive hover:bg-destructive hover:text-white font-display">STRIKE TEAM (+1)</Button>
                               </div>
                             )}
                           </div>
