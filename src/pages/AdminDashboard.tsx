@@ -30,7 +30,7 @@ type Team = {
   ban_count: number;
 };
 
-const ROUND_NAMES: Record<number, string> = { 1: "Entry Game", 2: "Mind Trap", 3: "Betrayal Stage", 4: "Final Showdown" };
+const ROUND_NAMES: Record<number, string> = { 1: "MCQ", 2: "Execution Trace", 3: "The Compiler", 4: "Code Autopsy" };
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -187,8 +187,8 @@ const AdminDashboard = () => {
 
   const statusLabel = (s: string) => {
     const map: Record<string, string> = {
-      waiting: "⏳ Waiting for Teams", round1: "🔴 Round 1 — Entry Game", round2: "🔴 Round 2 — Mind Trap",
-      round3: "🔴 Round 3 — Betrayal Stage", round4: "🔴 Round 4 — Final Showdown",
+      waiting: "⏳ Waiting for Teams", round1: "🔴 Round 1 — MCQ", round2: "🔴 Round 2 — Execution Trace",
+      round3: "🔴 Round 3 — The Compiler", round4: "🔴 Round 4 — Code Autopsy",
       between_rounds: "⏸ Between Rounds", finished: "🏆 Finished"
     };
     return map[s] || s;

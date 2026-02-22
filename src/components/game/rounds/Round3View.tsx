@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle, Terminal } from "lucide-react";
 import Editor from "@monaco-editor/react";
 import { executeCode } from "@/lib/executeCode";
 import { toast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 type QuestionType = {
     id?: string;
     question_text: string;
@@ -27,16 +29,41 @@ type RoundViewProps = {
 };
 
 const Round3View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, selectedSuit }: RoundViewProps) => {
+    const [languageId, setLanguageId] = useState<string>("63"); // Default to JS
+
     if (!currentQuestion) return null;
+
+    const getEditorLanguage = (id: string) => {
+        switch (id) {
+            case "63": return "javascript";
+            case "71": return "python";
+            case "62": return "java";
+            case "54": return "cpp";
+            default: return "javascript";
+        }
+    };
 
     return (
         <Card className="glass-card w-full animate-fade-in bg-[#1e1e1e] border-none shadow-2xl">
             <CardContent className="p-0 flex flex-col h-[600px]">
                 {/* Editor Toolbar */}
                 <div className="flex items-center justify-between px-4 py-2 bg-[#252526] border-b border-[#333]">
-                    <div className="flex items-center gap-2">
-                        <Terminal className="w-4 h-4 text-primary" />
-                        <span className="text-sm font-mono text-white/80">sandbox.ts</span>
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <Terminal className="w-4 h-4 text-primary" />
+                            <span className="text-sm font-mono text-white/80">sandbox.{getEditorLanguage(languageId) === "javascript" ? "js" : getEditorLanguage(languageId) === "python" ? "py" : getEditorLanguage(languageId) === "java" ? "java" : "cpp"}</span>
+                        </div>
+                        <Select value={languageId} onValueChange={setLanguageId}>
+                            <SelectTrigger className="w-[140px] h-7 bg-black/50 border-primary/30 text-xs font-mono text-primary outline-none focus:ring-1 focus:ring-primary shadow-none">
+                                <SelectValue placeholder="Language" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-[#1e1e1e] border-[#333] text-white font-mono min-w-[140px]">
+                                <SelectItem value="63" className="text-xs hover:bg-primary/20 hover:text-primary focus:bg-primary/20 focus:text-primary transition-colors cursor-pointer py-1.5 focus:outline-none">JavaScript</SelectItem>
+                                <SelectItem value="71" className="text-xs hover:bg-primary/20 hover:text-primary focus:bg-primary/20 focus:text-primary transition-colors cursor-pointer py-1.5 focus:outline-none">Python</SelectItem>
+                                <SelectItem value="62" className="text-xs hover:bg-primary/20 hover:text-primary focus:bg-primary/20 focus:text-primary transition-colors cursor-pointer py-1.5 focus:outline-none">Java</SelectItem>
+                                <SelectItem value="54" className="text-xs hover:bg-primary/20 hover:text-primary focus:bg-primary/20 focus:text-primary transition-colors cursor-pointer py-1.5 focus:outline-none">C++</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div className="text-xs font-mono text-muted-foreground">
                         {selectedSuit?.name} - Challenge {currentQ + 1}
@@ -64,6 +91,7 @@ const Round3View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                         <Editor
                             height="100%"
                             defaultLanguage="javascript"
+                            language={getEditorLanguage(languageId)}
                             theme="vs-dark"
                             value={answer}
                             onChange={(value) => setAnswer(value || "")}
@@ -84,7 +112,7 @@ const Round3View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                     <Button
                         onClick={async () => {
                             try {
-                                const result = await executeCode(answer, 63); // 63 is typical ID mapped to JS
+                                const result = await executeCode(answer, parseInt(languageId, 10));
                                 console.log("Piston Execution Result:", result);
                                 toast({ title: "Compilation Attempted", description: "Piston execution logged to console." });
                             } catch (err: unknown) {
