@@ -124,32 +124,7 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
     }
   };
 
-  // Capture keystrokes so the editor displays reversed text but we store the actual code in `answer`.
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (!reverseMode) return;
-    const key = (e as KeyboardEvent).key;
-    if (!key) return;
-    if (key === 'Backspace') {
-      setAnswer(prev => prev.slice(0, -1));
-      e.preventDefault();
-      return;
-    }
-    if (key === 'Enter') {
-      setAnswer(prev => prev + '\n');
-      e.preventDefault();
-      return;
-    }
-    if (key === ' ') {
-      setAnswer(prev => prev + ' ');
-      e.preventDefault();
-      return;
-    }
-    if (key.length === 1 && key.match(/[\x20-\x7E]/)) {
-      setAnswer(prev => prev + key);
-      e.preventDefault();
-      return;
-    }
-  };
+  // Editor input is handled via `onChange` so we maintain a single source of truth for `answer`.
 
   const allTestsPassed = testResults && testsPassed === testsTotal && testsTotal > 0;
 
@@ -218,7 +193,7 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
               extensions={languageExtensions[getEditorLanguage(languageId)] ? [languageExtensions[getEditorLanguage(languageId)]] : []}
               theme={githubDark}
               basicSetup={{ lineNumbers: true }}
-              onKeyDown={(ev: any) => handleKeyDown(ev as KeyboardEvent)}
+              
               onChange={(value) => {
                 if (reverseMode) {
                   // `value` is the displayed (reversed) text in the editor — store the unreversed code
