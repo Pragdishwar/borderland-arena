@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,6 +6,7 @@ import { CheckCircle, Figma, Terminal as TerminalIcon } from "lucide-react";
 import { DiffEditor } from "@monaco-editor/react";
 import { executeCode } from "@/lib/executeCode";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 type QuestionType = {
     id?: string;
     question_text: string;
@@ -31,6 +32,7 @@ type RoundViewProps = {
 
 const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, isRound4 }: RoundViewProps) => {
     const editorRef = useRef<any>(null);
+    const [isExecutingAutopsy, setIsExecutingAutopsy] = useState(false);
 
     if (!currentQuestion) return null;
 
@@ -131,8 +133,12 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                         let finalPayload = answer;
 
                         if (isCodeAutopsy && !isDesignTask) {
+                            setIsExecutingAutopsy(true);
                             let linesChanged = 0;
+                            let modifiedCodeText = answer;
+
                             if (editorRef.current) {
+                                modifiedCodeText = editorRef.current.getModifiedEditor().getValue() || answer;
                                 const changes = editorRef.current.getLineChanges();
                                 if (changes) {
                                     changes.forEach((change: any) => {
@@ -145,25 +151,43 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                                 }
                             }
 
-                            const finalCode = answer || originalFailingCode;
-                            finalPayload = JSON.stringify({ finalCode, totalLinesChanged: linesChanged });
+                            const finalCode = modifiedCodeText || originalFailingCode;
 
                             try {
-                                const result = await executeCode(finalCode, 63);
-                                console.log("Piston Code Autopsy Result:", result);
-                                toast({ title: "Fix Deployed", description: "Piston execution logged to console." });
+                                const { data, error } = await supabase.functions.invoke('evaluate-autopsy', {
+                                    body: {
+                                        player_id: localStorage.getItem("team_id") || "unknown",
+                                        challenge_id: currentQuestion.id || "unknown",
+                                        modified_code: finalCode,
+                                        lines_changed: linesChanged
+                                    }
+                                });
+
+                                if (error) throw error;
+
+                                if (data.success) {
+                                    toast({ title: "SYSTEM RESTORED", description: `${data.message} Score: ${data.score}` });
+                                    finalPayload = JSON.stringify({ isAutopsyPipeline: true, success: data.success, score: data.score });
+                                    submitAnswer(finalPayload);
+                                } else {
+                                    toast({ title: "VALIDATION REJECTED", description: data.message, variant: "destructive" });
+                                }
                             } catch (err: unknown) {
                                 console.error(err);
                                 const e = err as Error;
-                                toast({ title: "Execution Failed", description: e.message, variant: "destructive" });
+                                toast({ title: "CRITICAL FAULT", description: e.message, variant: "destructive" });
+                            } finally {
+                                setIsExecutingAutopsy(false);
                             }
+                            return;
                         }
+
                         submitAnswer(finalPayload);
                     }}
-                    disabled={(!answer.trim() && !isCodeAutopsy) || isSubmitting} // Autopsy might have default text
+                    disabled={(!answer.trim() && !isCodeAutopsy) || isSubmitting || isExecutingAutopsy} // Autopsy might have default text
                     className="w-full font-mono font-bold bg-primary hover:bg-primary/80 text-black h-12 uppercase tracking-widest"
                 >
-                    {isCodeAutopsy && !isDesignTask ? "COMPILE & DEPLOY FIX" : isDesignTask ? "TRANSMIT DESIGN" : "DEPLOY FIX"}
+                    {isExecutingAutopsy ? "COMPILING PATCH..." : isCodeAutopsy && !isDesignTask ? "COMPILE & DEPLOY FIX" : isDesignTask ? "TRANSMIT DESIGN" : "DEPLOY FIX"}
                 </Button>
 
             </CardContent>
