@@ -5,33 +5,36 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Map Judge0 Language IDs to Piston Languages
-const getPistonLanguage = (judge0Id: number) => {
-  switch (judge0Id) {
-    case 63: return "javascript";
-    case 71: return "python";
-    case 62: return "java";
-    case 54: return "cpp";
-    default: return "javascript";
+// Judge0 CE language IDs (same as our frontend IDs)
+// 63 = JavaScript (Node.js), 71 = Python 3, 62 = Java, 54 = C++
+const JUDGE0_URL = "https://ce.judge0.com/submissions?base64_encoded=true&wait=true";
+
+function toBase64(str: string): string {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+function fromBase64(str: string): string {
+  try {
+    return decodeURIComponent(escape(atob(str)));
+  } catch {
+    return atob(str);
   }
-};
+}
 
-const PISTON_URL = "https://emkc.org/api/v2/piston/execute";
-
-async function runOnce(pistonLang: string, sourceCode: string, stdin: string) {
-  const response = await fetch(PISTON_URL, {
+async function runOnce(languageId: number, sourceCode: string, stdin: string) {
+  const response = await fetch(JUDGE0_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      language: pistonLang,
-      version: "*",
-      files: [{ content: sourceCode }],
-      stdin: stdin || "",
+      source_code: toBase64(sourceCode),
+      language_id: languageId,
+      stdin: toBase64(stdin),
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`Piston API error: ${response.statusText}`);
+    const text = await response.text();
+    throw new Error(`Judge0 API error (${response.status}): ${text}`);
   }
   return await response.json();
 }
@@ -51,8 +54,6 @@ serve(async (req: Request) => {
       });
     }
 
-    const pistonLang = getPistonLanguage(language_id);
-
     // ── Test-case mode ───────────────────────────────────────────────
     if (Array.isArray(test_cases) && test_cases.length > 0) {
       const results: { input: string; expected: string; actual: string; passed: boolean; error: string | null }[] = [];
@@ -63,10 +64,10 @@ serve(async (req: Request) => {
           const tcInput = (tc.input || "").replace(/\\n/g, "\n");
           const tcExpected = (tc.expected_output || "").replace(/\\n/g, "\n").trim();
 
-          const data = await runOnce(pistonLang, source_code, tcInput);
-          const stdout = (data.run?.stdout || "").trim();
-          const stderr = data.run?.stderr || "";
-          const compileErr = data.compile?.stderr || "";
+          const data = await runOnce(language_id, source_code, tcInput);
+          const stdout = data.stdout ? fromBase64(data.stdout).trim() : "";
+          const stderr = data.stderr ? fromBase64(data.stderr) : "";
+          const compileErr = data.compile_output ? fromBase64(data.compile_output) : "";
           const passed = stdout === tcExpected;
 
           results.push({
@@ -80,7 +81,7 @@ serve(async (req: Request) => {
           const e = err as Error;
           results.push({
             input: tc.input || "",
-            expected: (tc.expected_output || "").trim(),
+            expected: (tc.expected_output || "").replace(/\\n/g, "\n").trim(),
             actual: "",
             passed: false,
             error: e.message,
@@ -97,16 +98,13 @@ serve(async (req: Request) => {
     }
 
     // ── Legacy single-execution mode ─────────────────────────────────
-    const data = await runOnce(pistonLang, source_code, stdin || "");
+    const data = await runOnce(language_id, source_code, stdin || "");
 
     const mappedResponse = {
-      stdout: data.run?.stdout || null,
-      stderr: data.run?.stderr || null,
-      compile_output: data.compile?.stderr || null,
-      status: {
-        id: data.run?.code === 0 ? 3 : 11,
-        description: data.run?.code === 0 ? "Accepted" : "Runtime Error"
-      }
+      stdout: data.stdout ? fromBase64(data.stdout) : null,
+      stderr: data.stderr ? fromBase64(data.stderr) : null,
+      compile_output: data.compile_output ? fromBase64(data.compile_output) : null,
+      status: data.status || { id: 0, description: "Unknown" },
     };
 
     return new Response(JSON.stringify(mappedResponse), {
