@@ -3,7 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle, Figma, Terminal as TerminalIcon, Play, Loader2 } from "lucide-react";
-import { DiffEditor } from "@monaco-editor/react";
+import CodeMirror from '@uiw/react-codemirror';
+import { javascript } from '@codemirror/lang-javascript';
+import { python } from '@codemirror/lang-python';
+import { cpp } from '@codemirror/lang-cpp';
+import { java } from '@codemirror/lang-java';
+import { githubDark } from '@uiw/codemirror-theme-github';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -40,6 +45,14 @@ type RoundViewProps = {
 
 const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, isRound4 }: RoundViewProps) => {
     const editorRef = useRef<any>(null);
+    const [localCode, setLocalCode] = useState<string>(answer || originalFailingCode);
+
+    // Sync localCode when the question or incoming `answer` changes (but avoid clobbering during typing)
+    // Reset to the provided `answer` when the question changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useState(() => {
+        setLocalCode(answer && answer.trim().length > 0 ? answer : originalFailingCode);
+    });
     const [isRunning, setIsRunning] = useState(false);
     const [testResults, setTestResults] = useState<TestResult[] | null>(null);
     const [testsPassed, setTestsPassed] = useState(0);
@@ -69,10 +82,8 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
     const runTests = async () => {
         if (isRunning) return;
 
-        let codeToTest = answer;
-        if (isCodeAutopsy && !isDesignTask && editorRef.current) {
-            codeToTest = editorRef.current.getModifiedEditor().getValue() || answer;
-        }
+        // Use localCode (what the user is editing) as the source for tests
+        let codeToTest = localCode;
 
         if (!codeToTest?.trim()) return;
 
@@ -110,19 +121,15 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
 
     const handleSubmit = () => {
         if (isCodeAutopsy && !isDesignTask && hasTestCases) {
-            // Calculate lines changed for surgical scoring
+            // Calculate lines changed for surgical scoring using a simple line-by-line diff
+            const originalLines = originalFailingCode.split('\n');
+            const modifiedLines = (answer || originalFailingCode).split('\n');
             let linesChanged = 0;
-            if (editorRef.current) {
-                const changes = editorRef.current.getLineChanges();
-                if (changes) {
-                    changes.forEach((change: any) => {
-                        const isInsertion = change.originalEndLineNumber === 0;
-                        const isDeletion = change.modifiedEndLineNumber === 0;
-                        const originalLen = isInsertion ? 0 : change.originalEndLineNumber - change.originalStartLineNumber + 1;
-                        const modifiedLen = isDeletion ? 0 : change.modifiedEndLineNumber - change.modifiedStartLineNumber + 1;
-                        linesChanged += Math.max(originalLen, modifiedLen);
-                    });
-                }
+            const maxLen = Math.max(originalLines.length, modifiedLines.length);
+            for (let i = 0; i < maxLen; i++) {
+                const o = originalLines[i] || "";
+                const m = modifiedLines[i] || "";
+                if (o !== m) linesChanged += 1;
             }
 
             // Surgical scoring: 1000 base - 50 per line changed, proportional to tests passed
@@ -182,27 +189,29 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
 
                     {isCodeAutopsy && !isDesignTask ? (
                         <div className="relative z-10 h-[400px] border border-primary/30 rounded overflow-hidden">
-                            <DiffEditor
-                                height="100%"
-                                language="javascript"
-                                theme="vs-dark"
-                                original={originalFailingCode}
-                                modified={answer || originalFailingCode}
-                                onMount={(editor) => {
-                                    editorRef.current = editor;
-                                    // Listen to changes on the modified editor (right side)
-                                    editor.getModifiedEditor().onDidChangeModelContent(() => {
-                                        setAnswer(editor.getModifiedEditor().getValue());
-                                    });
-                                }}
-                                options={{
-                                    minimap: { enabled: false },
-                                    fontSize: 14,
-                                    fontFamily: "monospace",
-                                    renderSideBySide: true,
-                                    readOnly: false,
-                                }}
-                            />
+                                <div className="h-full w-full flex">
+                                    <div className="w-1/2 h-full border-r border-primary/20">
+                                        <CodeMirror
+                                            value={originalFailingCode}
+                                            extensions={[javascript()]}
+                                            theme={githubDark}
+                                            basicSetup={{ lineNumbers: true, foldGutter: false }}
+                                            editable={false}
+                                            className="h-full"
+                                        />
+                                    </div>
+                                    <div className="w-1/2 h-full">
+                                        <CodeMirror
+                                            ref={editorRef}
+                                            value={localCode}
+                                            extensions={[javascript()]}
+                                            theme={githubDark}
+                                            basicSetup={{ lineNumbers: true }}
+                                            onChange={(v) => setLocalCode(v || "")}
+                                            className="h-full"
+                                        />
+                                    </div>
+                                </div>
                         </div>
                     ) : isDesignTask ? (
                         <div className="space-y-4 relative z-10">
