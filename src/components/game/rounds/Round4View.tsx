@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,6 +30,8 @@ type RoundViewProps = {
 };
 
 const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, isRound4 }: RoundViewProps) => {
+    const editorRef = useRef<any>(null);
+
     if (!currentQuestion) return null;
 
     // Distinguish between Terminal Task (Bug Hunt) vs Design Task (Figma) vs Code Autopsy
@@ -80,6 +83,7 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                                 original={originalFailingCode}
                                 modified={answer || originalFailingCode}
                                 onMount={(editor) => {
+                                    editorRef.current = editor;
                                     // Listen to changes on the modified editor (right side)
                                     editor.getModifiedEditor().onDidChangeModelContent(() => {
                                         setAnswer(editor.getModifiedEditor().getValue());
@@ -124,9 +128,28 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
 
                 <Button
                     onClick={async () => {
+                        let finalPayload = answer;
+
                         if (isCodeAutopsy && !isDesignTask) {
+                            let linesChanged = 0;
+                            if (editorRef.current) {
+                                const changes = editorRef.current.getLineChanges();
+                                if (changes) {
+                                    changes.forEach((change: any) => {
+                                        const isInsertion = change.originalEndLineNumber === 0;
+                                        const isDeletion = change.modifiedEndLineNumber === 0;
+                                        const originalLen = isInsertion ? 0 : change.originalEndLineNumber - change.originalStartLineNumber + 1;
+                                        const modifiedLen = isDeletion ? 0 : change.modifiedEndLineNumber - change.modifiedStartLineNumber + 1;
+                                        linesChanged += Math.max(originalLen, modifiedLen);
+                                    });
+                                }
+                            }
+
+                            const finalCode = answer || originalFailingCode;
+                            finalPayload = JSON.stringify({ finalCode, totalLinesChanged: linesChanged });
+
                             try {
-                                const result = await executeCode(answer || originalFailingCode, 63);
+                                const result = await executeCode(finalCode, 63);
                                 console.log("Piston Code Autopsy Result:", result);
                                 toast({ title: "Fix Deployed", description: "Piston execution logged to console." });
                             } catch (err: unknown) {
@@ -135,7 +158,7 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                                 toast({ title: "Execution Failed", description: e.message, variant: "destructive" });
                             }
                         }
-                        submitAnswer(answer);
+                        submitAnswer(finalPayload);
                     }}
                     disabled={(!answer.trim() && !isCodeAutopsy) || isSubmitting} // Autopsy might have default text
                     className="w-full font-mono font-bold bg-primary hover:bg-primary/80 text-black h-12 uppercase tracking-widest"
