@@ -136,7 +136,7 @@ const QuestionManager = ({ gameId }: Props) => {
       correct_answer: form.correct_answer,
       points: form.points,
       question_type: form.question_type,
-      options: opts.length > 0 ? opts : null,
+      options: opts && opts.length > 0 ? opts : null,
       round_number: activeRound,
       suit: activeSuit,
       image_url: form.question_type === "image" ? (form.image_url || null) : null,
