@@ -16,13 +16,33 @@ const getPistonLanguage = (judge0Id: number) => {
   }
 };
 
+const PISTON_URL = "https://emkc.org/api/v2/piston/execute";
+
+async function runOnce(pistonLang: string, sourceCode: string, stdin: string) {
+  const response = await fetch(PISTON_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      language: pistonLang,
+      version: "*",
+      files: [{ content: sourceCode }],
+      stdin: stdin || "",
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Piston API error: ${response.statusText}`);
+  }
+  return await response.json();
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { source_code, language_id, stdin } = await req.json();
+    const { source_code, language_id, stdin, test_cases } = await req.json();
 
     if (!source_code || !language_id) {
       return new Response(JSON.stringify({ error: "Missing payload" }), {
@@ -33,44 +53,55 @@ serve(async (req: Request) => {
 
     const pistonLang = getPistonLanguage(language_id);
 
-    // Piston API URL (change this if you self-host Piston!)
-    const PISTON_URL = "https://emkc.org/api/v2/piston/execute";
+    // ── Test-case mode ───────────────────────────────────────────────
+    if (Array.isArray(test_cases) && test_cases.length > 0) {
+      const results: { input: string; expected: string; actual: string; passed: boolean; error: string | null }[] = [];
 
-    // Optional: If you got a Piston API key, get it from Supabase secrets
-    // const apiKey = Deno.env.get("PISTON_API_KEY");
+      for (const tc of test_cases) {
+        try {
+          const data = await runOnce(pistonLang, source_code, tc.input || "");
+          const stdout = (data.run?.stdout || "").trim();
+          const stderr = data.run?.stderr || "";
+          const compileErr = data.compile?.stderr || "";
+          const expected = (tc.expected_output || "").trim();
+          const passed = stdout === expected;
 
-    const response = await fetch(PISTON_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // "Authorization": `apiKey ${apiKey}` // Uncomment if using auth
-      },
-      body: JSON.stringify({
-        language: pistonLang,
-        version: "*", // Automatically use the latest version available
-        files: [
-          {
-            content: source_code
-          }
-        ],
-        stdin: stdin || "",
-      }),
-    });
+          results.push({
+            input: tc.input || "",
+            expected,
+            actual: stdout,
+            passed,
+            error: compileErr || stderr || null,
+          });
+        } catch (err: unknown) {
+          const e = err as Error;
+          results.push({
+            input: tc.input || "",
+            expected: (tc.expected_output || "").trim(),
+            actual: "",
+            passed: false,
+            error: e.message,
+          });
+        }
+      }
 
-    if (!response.ok) {
-      throw new Error(`Piston API error: ${response.statusText}`);
+      const passed = results.filter(r => r.passed).length;
+
+      return new Response(JSON.stringify({ passed, total: results.length, results }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
     }
 
-    const data = await response.json();
+    // ── Legacy single-execution mode ─────────────────────────────────
+    const data = await runOnce(pistonLang, source_code, stdin || "");
 
-    // Map Piston's response format back to what our frontend expects
-    // Piston returns { run: { stdout: "...", stderr: "...", code: 0 } }
     const mappedResponse = {
       stdout: data.run?.stdout || null,
       stderr: data.run?.stderr || null,
       compile_output: data.compile?.stderr || null,
       status: {
-        id: data.run?.code === 0 ? 3 : 11, // 3 = Accepted, 11 = Error in Judge0 terms
+        id: data.run?.code === 0 ? 3 : 11,
         description: data.run?.code === 0 ? "Accepted" : "Runtime Error"
       }
     };

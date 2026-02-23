@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Check, Image, X, Copy } from "lucide-react";
+import { Pencil, Trash2, Check, Image, X, Copy, Plus, Minus } from "lucide-react";
 
 const SUITS = ["spades", "hearts", "diamonds", "clubs"];
 const SUIT_LABELS: Record<string, string> = { spades: "♠ Spades", hearts: "♥ Hearts", diamonds: "♦ Diamonds", clubs: "♣ Clubs" };
@@ -33,6 +33,7 @@ const QuestionManager = ({ gameId }: Props) => {
   const [editingSlot, setEditingSlot] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ question_text: "", correct_answer: "", points: 10, question_type: "text", options: ["", "", "", ""] as string[], image_url: "" as string });
+  const [testCases, setTestCases] = useState<{ input: string; expected_output: string }[]>([{ input: "", expected_output: "" }]);
   const [uploading, setUploading] = useState(false);
   const [games, setGames] = useState<any[]>([]);
   const [cloneSourceId, setCloneSourceId] = useState("");
@@ -114,8 +115,14 @@ const QuestionManager = ({ gameId }: Props) => {
         toast({ title: "Correct answer must match one option", variant: "destructive" });
         return;
       }
-    } else if (isRound4) {
-      // Round 4 specific validation
+    } else if ((isRound3 || isRound4) && testCases.length > 0) {
+      const validCases = testCases.filter(tc => tc.expected_output.trim());
+      if (validCases.length === 0) {
+        toast({ title: "At least one test case required", description: "Provide at least one test case with expected output.", variant: "destructive" });
+        return;
+      }
+    }
+    if (isRound4) {
       const failingCode = form.options[0]?.trim();
       const isAutopsy = form.question_text.toLowerCase().includes("autopsy");
       if (isAutopsy && !failingCode) {
@@ -131,9 +138,18 @@ const QuestionManager = ({ gameId }: Props) => {
       opts = form.options.filter(o => o.trim());
     }
 
+    // For Rounds 3 & 4, serialize test cases into correct_answer as JSON
+    let finalCorrectAnswer = form.correct_answer;
+    if (isRound3 || isRound4) {
+      const validCases = testCases.filter(tc => tc.expected_output.trim());
+      if (validCases.length > 0) {
+        finalCorrectAnswer = JSON.stringify(validCases);
+      }
+    }
+
     const payload = {
       question_text: form.question_type === "image" ? (form.question_text || "Image Question") : form.question_text,
-      correct_answer: form.correct_answer,
+      correct_answer: finalCorrectAnswer,
       points: form.points,
       question_type: form.question_type,
       options: opts && opts.length > 0 ? opts : null,
@@ -184,9 +200,23 @@ const QuestionManager = ({ gameId }: Props) => {
         options: [opts[0] || "", opts[1] || "", opts[2] || "", opts[3] || ""],
         image_url: existing.image_url || "",
       });
+      // Parse test cases from correct_answer for rounds 3 & 4
+      if (activeRound === 3 || activeRound === 4) {
+        try {
+          const parsed = JSON.parse(existing.correct_answer);
+          if (Array.isArray(parsed)) {
+            setTestCases(parsed.map((tc: any) => ({ input: tc.input || "", expected_output: tc.expected_output || "" })));
+          } else {
+            setTestCases([{ input: "", expected_output: "" }]);
+          }
+        } catch {
+          setTestCases([{ input: "", expected_output: "" }]);
+        }
+      }
     } else {
       setEditingId(null);
       setForm({ question_text: "", correct_answer: "", points: isRound4 ? 20 : 10, question_type: "text", options: ["", "", "", ""], image_url: "" });
+      setTestCases([{ input: "", expected_output: "" }]);
     }
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
   };
@@ -195,6 +225,7 @@ const QuestionManager = ({ gameId }: Props) => {
     setEditingSlot(null);
     setEditingId(null);
     setForm({ question_text: "", correct_answer: "", points: isRound4 ? 20 : 10, question_type: "text", options: ["", "", "", ""], image_url: "" });
+    setTestCases([{ input: "", expected_output: "" }]);
   };
 
   const filledCount = questions.length;
@@ -347,15 +378,48 @@ const QuestionManager = ({ gameId }: Props) => {
             )}
 
             {isRound3 && (
-              <p className="text-xs text-primary font-body">⚡ Round 3: The Compiler — Operatives will write code in a Monaco editor.</p>
+              <div className="space-y-3">
+                <p className="text-xs text-primary font-body">⚡ Round 3: The Compiler — Operatives will write code in a Monaco editor.</p>
+                <div className="bg-primary/10 border border-primary/20 p-3 rounded-md space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-primary font-mono">Test Cases (stdin → expected stdout)</p>
+                    <Button size="sm" variant="ghost" className="text-primary h-7 text-xs" onClick={() => setTestCases(tc => [...tc, { input: "", expected_output: "" }])}>
+                      <Plus className="h-3 w-3 mr-1" /> Add Test
+                    </Button>
+                  </div>
+                  {testCases.map((tc, idx) => (
+                    <div key={idx} className="flex gap-2 items-start">
+                      <div className="flex-1 space-y-1">
+                        <Input
+                          placeholder={`Input ${idx + 1} (stdin)...`}
+                          value={tc.input}
+                          onChange={e => { const n = [...testCases]; n[idx] = { ...n[idx], input: e.target.value }; setTestCases(n); }}
+                          className="bg-black/80 border-primary/20 font-mono text-xs h-8"
+                        />
+                        <Input
+                          placeholder={`Expected output ${idx + 1}...`}
+                          value={tc.expected_output}
+                          onChange={e => { const n = [...testCases]; n[idx] = { ...n[idx], expected_output: e.target.value }; setTestCases(n); }}
+                          className="bg-black/80 border-primary/20 font-mono text-xs h-8"
+                        />
+                      </div>
+                      {testCases.length > 1 && (
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive mt-1" onClick={() => setTestCases(tc => tc.filter((_, i) => i !== idx))}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             {isRound4 && (
-              <div className="space-y-2">
-                <p className="text-xs text-primary font-body">⚡ Round 4: Hard mode — players must type the exact answer (no multiple choice)</p>
+              <div className="space-y-3">
+                <p className="text-xs text-primary font-body">⚡ Round 4: Code Autopsy — players fix buggy code in a Diff Editor</p>
                 <div className="bg-primary/10 border border-primary/20 p-3 rounded-md space-y-2">
-                  <p className="text-xs text-primary font-mono">Code Autopsy Setup</p>
-                  <p className="text-xs text-muted-foreground font-body leading-tight">If "autopsy" is in the question text, the UI expects you to provide the original buggy code. Provide it below. If this is a Design/Terminal task, leave it blank.</p>
+                  <p className="text-xs text-primary font-mono">Buggy Code (left panel)</p>
+                  <p className="text-xs text-muted-foreground font-body leading-tight">Provide the original buggy code. Players will see this on the left side of the diff editor.</p>
                   <Textarea
                     placeholder="// Enter the failing code snippet here..."
                     value={form.options[0] || ""}
@@ -366,6 +430,37 @@ const QuestionManager = ({ gameId }: Props) => {
                     }}
                     className="bg-black/80 border-primary/20 font-mono text-sm h-32"
                   />
+                </div>
+                <div className="bg-primary/10 border border-primary/20 p-3 rounded-md space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-primary font-mono">Test Cases (stdin → expected stdout)</p>
+                    <Button size="sm" variant="ghost" className="text-primary h-7 text-xs" onClick={() => setTestCases(tc => [...tc, { input: "", expected_output: "" }])}>
+                      <Plus className="h-3 w-3 mr-1" /> Add Test
+                    </Button>
+                  </div>
+                  {testCases.map((tc, idx) => (
+                    <div key={idx} className="flex gap-2 items-start">
+                      <div className="flex-1 space-y-1">
+                        <Input
+                          placeholder={`Input ${idx + 1} (stdin)...`}
+                          value={tc.input}
+                          onChange={e => { const n = [...testCases]; n[idx] = { ...n[idx], input: e.target.value }; setTestCases(n); }}
+                          className="bg-black/80 border-primary/20 font-mono text-xs h-8"
+                        />
+                        <Input
+                          placeholder={`Expected output ${idx + 1}...`}
+                          value={tc.expected_output}
+                          onChange={e => { const n = [...testCases]; n[idx] = { ...n[idx], expected_output: e.target.value }; setTestCases(n); }}
+                          className="bg-black/80 border-primary/20 font-mono text-xs h-8"
+                        />
+                      </div>
+                      {testCases.length > 1 && (
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive mt-1" onClick={() => setTestCases(tc => tc.filter((_, i) => i !== idx))}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

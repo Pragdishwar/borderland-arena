@@ -218,25 +218,25 @@ const GamePlay = () => {
       const q = questions[currentQ];
 
       let earned = 0;
-      let isCodeAutopsyPayload = false;
+      let isTestCasePipelinePayload = false;
 
-      // Detect Code Autopsy Execution Pipeline Payload
-      if (currentRound === 4) {
+      // Detect test case pipeline payloads from Rounds 3 & 4
+      if (currentRound === 3 || currentRound === 4) {
         try {
           const parsed = JSON.parse(finalAnswer);
-          if (parsed.isAutopsyPipeline) {
+          if (parsed.testCasePipeline || parsed.isAutopsyPipeline) {
             earned = parsed.score || 0;
-            isCodeAutopsyPayload = true;
+            isTestCasePipelinePayload = true;
           }
         } catch (e) { }
       }
 
-      // If it's the autopsy payload, success is already confirmed by the Edge Function,
-      // so we use the securely computed score.
-      // Otherwise fallback to legacy matching for other rounds or design tasks.
-      const isCorrect = isCodeAutopsyPayload ? true : finalAnswer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
+      // If it's a test case pipeline payload, the score is already computed
+      // by the frontend based on Piston execution results.
+      // Otherwise fallback to legacy matching for other rounds.
+      const isCorrect = isTestCasePipelinePayload ? true : finalAnswer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
 
-      if (!isCodeAutopsyPayload) {
+      if (!isTestCasePipelinePayload) {
         earned = isCorrect ? q.points : 0;
       }
 
