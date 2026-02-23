@@ -10,7 +10,6 @@ import { Pencil, Trash2, Check, Image, X, Copy } from "lucide-react";
 
 const SUITS = ["spades", "hearts", "diamonds", "clubs"];
 const SUIT_LABELS: Record<string, string> = { spades: "♠ Spades", hearts: "♥ Hearts", diamonds: "♦ Diamonds", clubs: "♣ Clubs" };
-const QUESTION_SLOTS = [1, 2, 3, 4, 5];
 
 type Question = {
   id: string;
@@ -67,7 +66,7 @@ const QuestionManager = ({ gameId }: Props) => {
 
   const handleClone = async () => {
     if (!gameId || !cloneSourceId) return;
-    if (!window.confirm("Clone all 50 questions from the selected source into this lobby?")) return;
+    if (!window.confirm("Clone all questions from the selected source into this lobby?")) return;
 
     setIsCloning(true);
     const { error } = await supabase.rpc("clone_game_questions", {
@@ -253,11 +252,11 @@ const QuestionManager = ({ gameId }: Props) => {
         </div>
 
         {/* Progress */}
-        <p className="text-xs text-muted-foreground font-body">{filledCount}/5 questions filled for Round {activeRound} · {SUIT_LABELS[activeSuit]}</p>
+        <p className="text-xs text-muted-foreground font-body">{filledCount}/{isRound1 ? 10 : 5} questions filled for Round {activeRound} · {SUIT_LABELS[activeSuit]}</p>
 
-        {/* 5 Question Slots */}
+        {/* Question Slots */}
         <div className="space-y-2">
-          {QUESTION_SLOTS.map(slot => {
+          {(isRound1 ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] : [1, 2, 3, 4, 5]).map(slot => {
             const q = getQuestionForSlot(slot);
             const isActive = editingSlot === slot;
             return (
