@@ -219,7 +219,14 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
               theme={githubDark}
               basicSetup={{ lineNumbers: true }}
               onKeyDown={(ev: any) => handleKeyDown(ev as KeyboardEvent)}
-              onChange={(value) => { if (!reverseMode) setAnswer(value || ""); }}
+              onChange={(value) => {
+                if (reverseMode) {
+                  // `value` is the displayed (reversed) text in the editor — store the unreversed code
+                  setAnswer(value ? reverseString(value) : "");
+                } else {
+                  setAnswer(value || "");
+                }
+              }}
               className="h-full w-full"
             />
           </div>
