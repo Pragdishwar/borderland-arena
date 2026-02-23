@@ -59,16 +59,19 @@ serve(async (req: Request) => {
 
       for (const tc of test_cases) {
         try {
-          const data = await runOnce(pistonLang, source_code, tc.input || "");
+          // Convert literal \n sequences to actual newlines (admin types "5\n3" in input field)
+          const tcInput = (tc.input || "").replace(/\\n/g, "\n");
+          const tcExpected = (tc.expected_output || "").replace(/\\n/g, "\n").trim();
+
+          const data = await runOnce(pistonLang, source_code, tcInput);
           const stdout = (data.run?.stdout || "").trim();
           const stderr = data.run?.stderr || "";
           const compileErr = data.compile?.stderr || "";
-          const expected = (tc.expected_output || "").trim();
-          const passed = stdout === expected;
+          const passed = stdout === tcExpected;
 
           results.push({
             input: tc.input || "",
-            expected,
+            expected: tcExpected,
             actual: stdout,
             passed,
             error: compileErr || stderr || null,

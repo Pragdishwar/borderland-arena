@@ -115,11 +115,15 @@ const QuestionManager = ({ gameId }: Props) => {
         toast({ title: "Correct answer must match one option", variant: "destructive" });
         return;
       }
-    } else if ((isRound3 || isRound4) && testCases.length > 0) {
-      const validCases = testCases.filter(tc => tc.expected_output.trim());
-      if (validCases.length === 0) {
-        toast({ title: "At least one test case required", description: "Provide at least one test case with expected output.", variant: "destructive" });
-        return;
+    } else if ((isRound3 || isRound4)) {
+      // Only validate test cases if the admin has actually entered data into any test case
+      const hasAnyTestCaseData = testCases.some(tc => tc.input.trim() || tc.expected_output.trim());
+      if (hasAnyTestCaseData) {
+        const validCases = testCases.filter(tc => tc.expected_output.trim());
+        if (validCases.length === 0) {
+          toast({ title: "Missing expected output", description: "Fill in expected output for at least one test case.", variant: "destructive" });
+          return;
+        }
       }
     }
     if (isRound4) {
@@ -138,7 +142,7 @@ const QuestionManager = ({ gameId }: Props) => {
       opts = form.options.filter(o => o.trim());
     }
 
-    // For Rounds 3 & 4, serialize test cases into correct_answer as JSON
+    // For Rounds 3 & 4, serialize test cases into correct_answer as JSON (only if non-empty)
     let finalCorrectAnswer = form.correct_answer;
     if (isRound3 || isRound4) {
       const validCases = testCases.filter(tc => tc.expected_output.trim());
@@ -465,8 +469,10 @@ const QuestionManager = ({ gameId }: Props) => {
               </div>
             )}
 
-            <Input placeholder={isRound3 || isRound4 ? "Correct answer (optional logic test/reference)" : "Exact correct answer text"} value={form.correct_answer} onChange={e => setForm(f => ({ ...f, correct_answer: e.target.value }))}
-              className="bg-secondary border-primary/20" />
+            {!isRound3 && !isRound4 && (
+              <Input placeholder="Exact correct answer text" value={form.correct_answer} onChange={e => setForm(f => ({ ...f, correct_answer: e.target.value }))}
+                className="bg-secondary border-primary/20" />
+            )}
 
             <div className="flex gap-2">
               <Button onClick={saveQuestion} disabled={form.question_type === "text" ? !form.question_text || (!isRound3 && !isRound4 && !form.correct_answer) : !form.image_url || (!isRound3 && !isRound4 && !form.correct_answer)} className="bg-primary hover:bg-primary/80 font-display">
