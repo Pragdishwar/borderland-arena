@@ -214,10 +214,39 @@ const GamePlay = () => {
 
     try {
       // Allow overriding the answer from the view
-      const finalAnswer = submittedAnswer || answer;
+      let finalAnswer = submittedAnswer || answer;
       const q = questions[currentQ];
+
+      let earned = 0;
+      let totalLinesChanged = 0;
+      let isCodeAutopsyPayload = false;
+
+      // Detect Code Autopsy Payload
+      if (currentRound === 4) {
+        try {
+          const parsed = JSON.parse(finalAnswer);
+          if (parsed.finalCode !== undefined && parsed.totalLinesChanged !== undefined) {
+            finalAnswer = parsed.finalCode;
+            totalLinesChanged = parsed.totalLinesChanged;
+            isCodeAutopsyPayload = true;
+          }
+        } catch (e) { }
+      }
+
       const isCorrect = finalAnswer.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
-      const earned = isCorrect ? q.points : 0;
+
+      if (isCodeAutopsyPayload) {
+        // Score = (TestCasesPassed * 100) - (totalLinesChanged * 5)
+        // Since TestCasesPassed is not directly from the db, map it proportionately from q.points.
+        const maxTestCases = Math.max(1, Math.floor(q.points / 100));
+        const testCasesPassed = isCorrect ? maxTestCases : 0;
+
+        earned = (testCasesPassed * 100) - (totalLinesChanged * 5);
+        if (earned < 0) earned = 0;
+      } else {
+        earned = isCorrect ? q.points : 0;
+      }
+
       const newScore = score + earned;
       const elapsed = Math.round((Date.now() - questionStartTime) / 1000);
       const newTotalTime = totalAnswerTime + elapsed;
