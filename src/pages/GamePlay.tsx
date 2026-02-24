@@ -67,6 +67,7 @@ const GamePlay = () => {
   const isSubmittingRef = useRef(false);
   const completedQRef = useRef<Set<number>>(new Set());
   const draftAnswersRef = useRef<Map<number, string>>(new Map());
+  const questionScoresRef = useRef<Map<number, number>>(new Map());
 
   // Shuffle suits randomly per render
   const shuffledSuits = useMemo(() => [...SUITS].sort(() => Math.random() - 0.5), [currentRound]);
@@ -206,10 +207,12 @@ const GamePlay = () => {
   };
 
   const submitAnswer = async (submittedAnswer: string) => {
-    if (!questions[currentQ] || isSubmitting || isSubmittingRef.current || completedQRef.current.has(currentQ)) return;
+    if (!questions[currentQ] || isSubmitting || isSubmittingRef.current) return;
+    // Only allow re-submission in rounds 3 and 4
+    const allowResubmit = currentRound === 3 || currentRound === 4;
+    if (!allowResubmit && completedQRef.current.has(currentQ)) return;
 
     // Lock synchronously to prevent rapid-fire Enter spam
-    completedQRef.current.add(currentQ);
     isSubmittingRef.current = true;
     setIsSubmitting(true);
 
@@ -241,56 +244,107 @@ const GamePlay = () => {
         earned = isCorrect ? q.points : 0;
       }
 
-      const newScore = score + earned;
-      const elapsed = Math.round((Date.now() - questionStartTime) / 1000);
-      const newTotalTime = totalAnswerTime + elapsed;
+      // Best-score-wins: only increase if new score is higher than previous attempt
+      const previousBest = questionScoresRef.current.get(currentQ) || 0;
+      const isResubmission = completedQRef.current.has(currentQ);
 
-      setScore(newScore);
-      setTotalAnswerTime(newTotalTime);
+      if (earned > previousBest) {
+        // New score is better — update the difference
+        const scoreDelta = earned - previousBest;
+        questionScoresRef.current.set(currentQ, earned);
+        const newScore = score + scoreDelta;
+        setScore(newScore);
 
-      // Hide the correct answers from the players to prevent team leakage!
-      toast({ title: "Answer Encrypted & Locked", description: "Awaiting final round tabulation..." });
+        toast({
+          title: isResubmission ? "IMPROVED! Score Updated" : "Answer Encrypted & Locked",
+          description: isResubmission ? `Score improved: ${previousBest} → ${earned} (+${scoreDelta} pts)` : "Awaiting final round tabulation..."
+        });
 
-      setAnswer("");
-      const nextQIndex = currentQ + 1;
-      if (nextQIndex < questions.length) {
-        setCurrentQ(nextQIndex);
-        setQuestionStartTime(Date.now());
+        // Update DB
+        const elapsed = Math.round((Date.now() - questionStartTime) / 1000);
+        const newTotalTime = totalAnswerTime + elapsed;
+        setTotalAnswerTime(newTotalTime);
+        await supabase.from("round_scores").update({
+          score: newScore,
+          answer_time_seconds: newTotalTime,
+          current_q_index: Math.max(currentQ + 1, ...Array.from(completedQRef.current).map(i => i + 1))
+        }).eq("team_id", teamId!).eq("game_id", gameId!).eq("round_number", currentRound);
       } else {
-        // Check if there are any unsolved questions to go back to
-        const unsolvedIndex = questions.findIndex((_, idx) => !completedQRef.current.has(idx));
-        if (unsolvedIndex !== -1) {
-          setCurrentQ(unsolvedIndex);
-          setQuestionStartTime(Date.now());
-          toast({ title: "Questions remaining", description: `Navigated to unsolved question ${unsolvedIndex + 1}.` });
+        // Score not better
+        if (isResubmission) {
+          toast({ title: "No improvement", description: `Previous best: ${previousBest} pts. This attempt: ${earned} pts. Keeping best score.` });
         } else {
-          setRoundComplete(true);
-          setFrozenTime(timeLeft);
-          setShowResults(true);
-          toast({ title: "Round complete!", description: "Awaiting admin confirmation." });
+          questionScoresRef.current.set(currentQ, earned);
+          const newScore = score + earned;
+          setScore(newScore);
+          toast({ title: "Answer Encrypted & Locked", description: "Awaiting final round tabulation..." });
+
+          const elapsed = Math.round((Date.now() - questionStartTime) / 1000);
+          const newTotalTime = totalAnswerTime + elapsed;
+          setTotalAnswerTime(newTotalTime);
+          await supabase.from("round_scores").update({
+            score: newScore,
+            answer_time_seconds: newTotalTime,
+            current_q_index: Math.max(currentQ + 1, ...Array.from(completedQRef.current).map(i => i + 1))
+          }).eq("team_id", teamId!).eq("game_id", gameId!).eq("round_number", currentRound);
         }
       }
 
-      // Update DB with the furthest reached index
-      const furthestIndex = Math.max(nextQIndex, currentQ + 1);
-      await supabase.from("round_scores").update({
-        score: newScore,
-        answer_time_seconds: newTotalTime,
-        current_q_index: furthestIndex
-      }).eq("team_id", teamId!).eq("game_id", gameId!).eq("round_number", currentRound);
+      // Mark as completed
+      completedQRef.current.add(currentQ);
+      // Clear draft for this question
+      draftAnswersRef.current.delete(currentQ);
+
+      const nextQIndex = currentQ + 1;
+      // Only auto-advance if this was a first-time submission
+      if (!isResubmission) {
+        if (nextQIndex < questions.length) {
+          // Find next unsolved question
+          let nextUnsolved = -1;
+          for (let i = nextQIndex; i < questions.length; i++) {
+            if (!completedQRef.current.has(i)) { nextUnsolved = i; break; }
+          }
+          if (nextUnsolved !== -1) {
+            setCurrentQ(nextUnsolved);
+            setAnswer(draftAnswersRef.current.get(nextUnsolved) || "");
+          } else {
+            // Check for unsolved before current
+            const unsolvedIndex = questions.findIndex((_, idx) => !completedQRef.current.has(idx));
+            if (unsolvedIndex !== -1) {
+              setCurrentQ(unsolvedIndex);
+              setAnswer(draftAnswersRef.current.get(unsolvedIndex) || "");
+              toast({ title: "Questions remaining", description: `Navigated to unsolved question ${unsolvedIndex + 1}.` });
+            } else {
+              setRoundComplete(true);
+              setFrozenTime(timeLeft);
+              setShowResults(true);
+              toast({ title: "Round complete!", description: "Awaiting admin confirmation." });
+            }
+          }
+        } else {
+          const unsolvedIndex = questions.findIndex((_, idx) => !completedQRef.current.has(idx));
+          if (unsolvedIndex !== -1) {
+            setCurrentQ(unsolvedIndex);
+            setAnswer(draftAnswersRef.current.get(unsolvedIndex) || "");
+            toast({ title: "Questions remaining", description: `Navigated to unsolved question ${unsolvedIndex + 1}.` });
+          } else {
+            setRoundComplete(true);
+            setFrozenTime(timeLeft);
+            setShowResults(true);
+            toast({ title: "Round complete!", description: "Awaiting admin confirmation." });
+          }
+        }
+      }
+      setQuestionStartTime(Date.now());
     } finally {
       setIsSubmitting(false);
       isSubmittingRef.current = false;
     }
   };
 
-  // Navigate to a specific question (only if not already completed)
+  // Navigate to a specific question
   const goToQuestion = (index: number) => {
     if (index < 0 || index >= questions.length) return;
-    if (completedQRef.current.has(index)) {
-      toast({ title: "Already submitted", description: `Question ${index + 1} was already answered.` });
-      return;
-    }
     // Save current answer as draft before navigating away
     if (answer.trim()) {
       draftAnswersRef.current.set(currentQ, answer);
@@ -554,13 +608,16 @@ const GamePlay = () => {
                         return (
                           <button
                             key={idx}
-                            onClick={() => !isCompleted && goToQuestion(idx)}
+                            onClick={() => {
+                              const canRetry = (currentRound === 3 || currentRound === 4) || !isCompleted;
+                              if (canRetry) goToQuestion(idx);
+                            }}
                             className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono font-bold transition-all
-                              ${isCompleted ? 'bg-green-500/80 text-black cursor-not-allowed' : ''}
-                              ${isCurrent && !isCompleted ? 'bg-cyan-500 text-black scale-110 ring-2 ring-cyan-400/50' : ''}
+                              ${isCompleted && !isCurrent ? `bg-green-500/80 text-black ${(currentRound === 3 || currentRound === 4) ? 'hover:bg-green-400 cursor-pointer' : 'cursor-not-allowed'}` : ''}
+                              ${isCurrent ? 'bg-cyan-500 text-black scale-110 ring-2 ring-cyan-400/50 cursor-pointer' : ''}
                               ${!isCurrent && !isCompleted ? 'bg-white/10 text-white/50 hover:bg-white/20 cursor-pointer' : ''}
                             `}
-                            title={isCompleted ? `Q${idx + 1} ✓ Submitted` : `Go to Q${idx + 1}`}
+                            title={isCompleted ? ((currentRound === 3 || currentRound === 4) ? `Q${idx + 1} ✓ (click to retry)` : `Q${idx + 1} ✓ Submitted`) : `Go to Q${idx + 1}`}
                           >
                             {isCompleted ? '✓' : idx + 1}
                           </button>
