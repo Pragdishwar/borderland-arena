@@ -1,3 +1,4 @@
+// @ts-ignore: Deno module import – works at runtime on Supabase Edge Functions
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const corsHeaders = {
