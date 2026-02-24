@@ -1,16 +1,21 @@
-import React, { useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle, Terminal, Play, Loader2 } from "lucide-react";
-import CodeMirror from '@uiw/react-codemirror';
-import { javascript } from '@codemirror/lang-javascript';
-import { python } from '@codemirror/lang-python';
-import { cpp } from '@codemirror/lang-cpp';
-import { java } from '@codemirror/lang-java';
-import { githubDark } from '@uiw/codemirror-theme-github';
+import ReverseEditor from "@/components/game/ReverseEditor";
+import { javascript } from "@codemirror/lang-javascript";
+import { python } from "@codemirror/lang-python";
+import { cpp } from "@codemirror/lang-cpp";
+import { java } from "@codemirror/lang-java";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type TestResult = {
   input: string;
@@ -49,12 +54,28 @@ const languageExtensions: Record<string, any> = {
   cpp: cpp(),
 };
 
-const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, selectedSuit }) => {
+const Round3View: React.FC<RoundViewProps> = ({
+  currentQuestion,
+  currentQ,
+  totalQuestions,
+  answer,
+  setAnswer,
+  submitAnswer,
+  isSubmitting,
+  selectedSuit,
+}) => {
   const [languageId, setLanguageId] = useState<string>("63");
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
   const [testsPassed, setTestsPassed] = useState(0);
   const [testsTotal, setTestsTotal] = useState(0);
+
+  const resetTestState = useCallback(() => {
+    setTestResults(null);
+    setTestsPassed(0);
+    setTestsTotal(0);
+    setIsRunning(false);
+  }, []);
 
   const reverseMode = true;
   const editorRef = useRef<any>(null);
@@ -63,11 +84,16 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
 
   const getEditorLanguage = (id: string) => {
     switch (id) {
-      case "63": return "javascript";
-      case "71": return "python";
-      case "62": return "java";
-      case "54": return "cpp";
-      default: return "javascript";
+      case "63":
+        return "javascript";
+      case "71":
+        return "python";
+      case "62":
+        return "java";
+      case "54":
+        return "cpp";
+      default:
+        return "javascript";
     }
   };
 
@@ -75,38 +101,58 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
     try {
       const parsed = JSON.parse(currentQuestion.correct_answer);
       if (Array.isArray(parsed)) return parsed;
-    } catch { }
+    } catch {}
     return [];
   };
 
   const testCases = getTestCases();
   const hasTestCases = testCases.length > 0;
 
+  useEffect(() => {
+    // Clear the previous question's results when moving to a new question.
+    resetTestState();
+  }, [currentQ, currentQuestion?.id, resetTestState]);
+
   const runTests = async () => {
     if (!answer.trim() || isRunning) return;
     setIsRunning(true);
     setTestResults(null);
     try {
-      const { data, error } = await supabase.functions.invoke('piston-execute', {
-        body: {
-          source_code: answer,
-          language_id: parseInt(languageId, 10),
-          test_cases: testCases,
-        }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "piston-execute",
+        {
+          body: {
+            // Round 3 compiles exactly what's in the editor. The editor itself reverses typing.
+            source_code: answer,
+            language_id: parseInt(languageId, 10),
+            test_cases: testCases,
+          },
+        },
+      );
       if (error) throw error;
       setTestResults(data.results || []);
       setTestsPassed(data.passed || 0);
       setTestsTotal(data.total || 0);
       if (data.passed === data.total) {
-        toast({ title: "ALL TESTS PASSED", description: `${data.passed}/${data.total} test cases passed.` });
+        toast({
+          title: "ALL TESTS PASSED",
+          description: `${data.passed}/${data.total} test cases passed.`,
+        });
       } else {
-        toast({ title: "SOME TESTS FAILED", description: `${data.passed}/${data.total} test cases passed.`, variant: "destructive" });
+        toast({
+          title: "SOME TESTS FAILED",
+          description: `${data.passed}/${data.total} test cases passed.`,
+          variant: "destructive",
+        });
       }
     } catch (err: unknown) {
       console.error(err);
       const e = err as Error;
-      toast({ title: "COMPILATION FAILED", description: e.message, variant: "destructive" });
+      toast({
+        title: "COMPILATION FAILED",
+        description: e.message,
+        variant: "destructive",
+      });
     } finally {
       setIsRunning(false);
     }
@@ -114,15 +160,24 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
 
   const handleSubmit = () => {
     if (hasTestCases && testResults) {
-      const proportionalScore = testsTotal > 0 ? Math.round(currentQuestion.points * (testsPassed / testsTotal)) : 0;
-      const payload = JSON.stringify({ testCasePipeline: true, passed: testsPassed, total: testsTotal, score: proportionalScore });
+      const proportionalScore =
+        testsTotal > 0
+          ? Math.round(currentQuestion.points * (testsPassed / testsTotal))
+          : 0;
+      const payload = JSON.stringify({
+        testCasePipeline: true,
+        passed: testsPassed,
+        total: testsTotal,
+        score: proportionalScore,
+      });
       submitAnswer(payload);
     } else {
       submitAnswer(answer);
     }
   };
 
-  const allTestsPassed = testResults && testsPassed === testsTotal && testsTotal > 0;
+  const allTestsPassed =
+    testResults && testsPassed === testsTotal && testsTotal > 0;
 
   return (
     <Card className="glass-card w-full animate-fade-in bg-[#1e1e1e] border-none shadow-2xl">
@@ -131,7 +186,16 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <Terminal className="w-4 h-4 text-primary" />
-              <span className="text-sm font-mono text-white/80">sandbox.{getEditorLanguage(languageId) === "javascript" ? "js" : getEditorLanguage(languageId) === "python" ? "py" : getEditorLanguage(languageId) === "java" ? "java" : "cpp"}</span>
+              <span className="text-sm font-mono text-white/80">
+                sandbox.
+                {getEditorLanguage(languageId) === "javascript"
+                  ? "js"
+                  : getEditorLanguage(languageId) === "python"
+                    ? "py"
+                    : getEditorLanguage(languageId) === "java"
+                      ? "java"
+                      : "cpp"}
+              </span>
             </div>
             <Select value={languageId} onValueChange={setLanguageId}>
               <SelectTrigger className="w-[140px] h-7 bg-black/50 border-primary/30 text-xs font-mono text-primary outline-none focus:ring-1 focus:ring-primary shadow-none">
@@ -146,35 +210,73 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
             </Select>
           </div>
           <div className="flex items-center gap-3">
-            {hasTestCases && <span className="text-xs font-mono text-muted-foreground">{testCases.length} test{testCases.length !== 1 ? 's' : ''}</span>}
-            <span className="text-xs font-mono text-muted-foreground">{selectedSuit?.name} - Challenge {currentQ + 1}</span>
+            {hasTestCases && (
+              <span className="text-xs font-mono text-muted-foreground">
+                {testCases.length} test{testCases.length !== 1 ? "s" : ""}
+              </span>
+            )}
+            <span className="text-xs font-mono text-muted-foreground">
+              {selectedSuit?.name} - Challenge {currentQ + 1}
+            </span>
           </div>
         </div>
 
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-[#333] bg-[#1e1e1e] p-6 overflow-y-auto">
-            <h3 className="font-display text-lg text-primary mb-4">Challenge Specs</h3>
+            <h3 className="font-display text-lg text-primary mb-4">
+              Challenge Specs
+            </h3>
             <div className="prose prose-invert prose-sm max-w-none">
               <p className="text-gray-300">{currentQuestion.question_text}</p>
-              {currentQuestion.image_url && <img src={currentQuestion.image_url} className="mt-4 rounded border border-[#444]" />}
-              <div className="mt-6 bg-[#2d2d2d] p-3 rounded text-xs font-mono text-green-400 border border-[#3e3e3e]">Points: {currentQuestion.points}</div>
+              {currentQuestion.image_url && (
+                <img
+                  src={currentQuestion.image_url}
+                  className="mt-4 rounded border border-[#444]"
+                />
+              )}
+              <div className="mt-6 bg-[#2d2d2d] p-3 rounded text-xs font-mono text-green-400 border border-[#3e3e3e]">
+                Points: {currentQuestion.points}
+              </div>
 
               {testResults && (
                 <div className="mt-4 space-y-2">
-                  <div className={`flex items-center gap-2 text-sm font-mono ${allTestsPassed ? 'text-green-400' : 'text-red-400'}`}>
+                  <div
+                    className={`flex items-center gap-2 text-sm font-mono ${allTestsPassed ? "text-green-400" : "text-red-400"}`}
+                  >
                     <CheckCircle className="w-4 h-4" />
                     {testsPassed}/{testsTotal} Tests Passed
                   </div>
                   {testResults.map((r, i) => (
-                    <div key={i} className={`p-2 rounded text-xs font-mono border ${r.passed ? 'bg-green-500/10 border-green-500/30 text-green-300' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
+                    <div
+                      key={i}
+                      className={`p-2 rounded text-xs font-mono border ${r.passed ? "bg-green-500/10 border-green-500/30 text-green-300" : "bg-red-500/10 border-red-500/30 text-red-300"}`}
+                    >
                       <div className="flex items-center gap-1 mb-1">
-                        <span className={r.passed ? 'text-green-400' : 'text-red-400'}>{r.passed ? '✓' : '✗'}</span>
+                        <span
+                          className={
+                            r.passed ? "text-green-400" : "text-red-400"
+                          }
+                        >
+                          {r.passed ? "✓" : "✗"}
+                        </span>
                         <span>Test {i + 1}</span>
                       </div>
-                      {r.input && <p className="text-[10px] text-white/50">Input: {r.input}</p>}
-                      <p className="text-[10px] text-white/50">Expected: {r.expected}</p>
-                      <p className="text-[10px] text-white/50">Got: {r.actual || '(empty)'}</p>
-                      {r.error && <p className="text-[10px] text-red-400 mt-1">{r.error}</p>}
+                      {r.input && (
+                        <p className="text-[10px] text-white/50">
+                          Input: {r.input}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-white/50">
+                        Expected: {r.expected}
+                      </p>
+                      <p className="text-[10px] text-white/50">
+                        Got: {r.actual || "(empty)"}
+                      </p>
+                      {r.error && (
+                        <p className="text-[10px] text-red-400 mt-1">
+                          {r.error}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -182,30 +284,16 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
             </div>
           </div>
 
-          {/* Reverse mode: inject CSS to force right-to-left rendering inside CodeMirror */}
-          {reverseMode && (
-            <style>{`
-              .reverse-editor .cm-line {
-                direction: rtl;
-                unicode-bidi: bidi-override;
-                text-align: left;
-              }
-              .reverse-editor .cm-gutters {
-                direction: ltr;
-              }
-            `}</style>
-          )}
-          <div
-            className={`flex-1 bg-[#1e1e1e] flex flex-col relative w-full h-full min-h-[400px] ${reverseMode ? 'reverse-editor' : ''}`}
-          >
-            <CodeMirror
-              ref={editorRef}
+          <div className="flex-1 bg-[#1e1e1e] flex flex-col relative w-full h-full min-h-[400px]">
+            <ReverseEditor
               value={answer}
-              extensions={languageExtensions[getEditorLanguage(languageId)] ? [languageExtensions[getEditorLanguage(languageId)]] : []}
-              theme={githubDark}
-              basicSetup={{ lineNumbers: true }}
-              onChange={(value) => setAnswer(value || "")}
-              className="h-full w-full"
+              onChange={setAnswer}
+              reverseMode={true}
+              extensions={
+                languageExtensions[getEditorLanguage(languageId)]
+                  ? [languageExtensions[getEditorLanguage(languageId)]]
+                  : []
+              }
             />
           </div>
         </div>
@@ -213,15 +301,38 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
         <div className="bg-[#252526] border-t border-[#333] p-2 flex justify-between items-center gap-2">
           {hasTestCases ? (
             <>
-              <Button onClick={runTests} disabled={!answer.trim() || isRunning} variant="ghost" className="text-green-400 hover:bg-green-500/10 font-mono text-xs h-8">
-                {isRunning ? (<><Loader2 className="mr-2 h-3 w-3 animate-spin" /> COMPILING...</>) : (<><Play className="mr-2 h-3 w-3" /> RUN TESTS</>)}
+              <Button
+                onClick={runTests}
+                disabled={!answer.trim() || isRunning}
+                variant="ghost"
+                className="text-green-400 hover:bg-green-500/10 font-mono text-xs h-8"
+              >
+                {isRunning ? (
+                  <>
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />{" "}
+                    COMPILING...
+                  </>
+                ) : (
+                  <>
+                    <Play className="mr-2 h-3 w-3" /> RUN TESTS
+                  </>
+                )}
               </Button>
-              <Button onClick={handleSubmit} disabled={!testResults || isSubmitting} className="bg-[#007acc] hover:bg-[#006bb3] text-white font-mono text-xs h-8">
-                <CheckCircle className="mr-2 h-3 w-3" /> SUBMIT ({testsPassed}/{testsTotal})
+              <Button
+                onClick={handleSubmit}
+                disabled={!testResults || isSubmitting}
+                className="bg-[#007acc] hover:bg-[#006bb3] text-white font-mono text-xs h-8"
+              >
+                <CheckCircle className="mr-2 h-3 w-3" /> SUBMIT ({testsPassed}/
+                {testsTotal})
               </Button>
             </>
           ) : (
-            <Button onClick={handleSubmit} disabled={!answer.trim() || isSubmitting} className="ml-auto bg-[#007acc] hover:bg-[#006bb3] text-white font-mono text-xs h-8">
+            <Button
+              onClick={handleSubmit}
+              disabled={!answer.trim() || isSubmitting}
+              className="ml-auto bg-[#007acc] hover:bg-[#006bb3] text-white font-mono text-xs h-8"
+            >
               <CheckCircle className="mr-2 h-3 w-3" /> COMPILE & SUBMIT
             </Button>
           )}
