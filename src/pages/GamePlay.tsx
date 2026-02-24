@@ -66,6 +66,7 @@ const GamePlay = () => {
   const [playedMemberIds, setPlayedMemberIds] = useState<string[]>([]);
   const isSubmittingRef = useRef(false);
   const completedQRef = useRef<Set<number>>(new Set());
+  const draftAnswersRef = useRef<Map<number, string>>(new Map());
 
   // Shuffle suits randomly per render
   const shuffledSuits = useMemo(() => [...SUITS].sort(() => Math.random() - 0.5), [currentRound]);
@@ -290,8 +291,14 @@ const GamePlay = () => {
       toast({ title: "Already submitted", description: `Question ${index + 1} was already answered.` });
       return;
     }
+    // Save current answer as draft before navigating away
+    if (answer.trim()) {
+      draftAnswersRef.current.set(currentQ, answer);
+    }
+    // Restore draft for the target question (if any)
+    const savedDraft = draftAnswersRef.current.get(index) || "";
     setCurrentQ(index);
-    setAnswer("");
+    setAnswer(savedDraft);
     setQuestionStartTime(Date.now());
   };
 
@@ -549,8 +556,8 @@ const GamePlay = () => {
                             key={idx}
                             onClick={() => !isCompleted && goToQuestion(idx)}
                             className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono font-bold transition-all
-                              ${isCurrent ? 'bg-primary text-black scale-110 ring-2 ring-primary/50' : ''}
                               ${isCompleted ? 'bg-green-500/80 text-black cursor-not-allowed' : ''}
+                              ${isCurrent && !isCompleted ? 'bg-cyan-500 text-black scale-110 ring-2 ring-cyan-400/50' : ''}
                               ${!isCurrent && !isCompleted ? 'bg-white/10 text-white/50 hover:bg-white/20 cursor-pointer' : ''}
                             `}
                             title={isCompleted ? `Q${idx + 1} ✓ Submitted` : `Go to Q${idx + 1}`}
