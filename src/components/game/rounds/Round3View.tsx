@@ -182,10 +182,21 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
             </div>
           </div>
 
-          {/* Reverse mode: CSS transform mirrors the editor visually, but the actual code stays correct */}
+          {/* Reverse mode: inject CSS to force right-to-left rendering inside CodeMirror */}
+          {reverseMode && (
+            <style>{`
+              .reverse-editor .cm-line {
+                direction: rtl;
+                unicode-bidi: bidi-override;
+                text-align: left;
+              }
+              .reverse-editor .cm-gutters {
+                direction: ltr;
+              }
+            `}</style>
+          )}
           <div
-            className="flex-1 bg-[#1e1e1e] flex flex-col relative w-full h-full min-h-[400px]"
-            style={reverseMode ? { transform: 'scaleX(-1)' } : undefined}
+            className={`flex-1 bg-[#1e1e1e] flex flex-col relative w-full h-full min-h-[400px] ${reverseMode ? 'reverse-editor' : ''}`}
           >
             <CodeMirror
               ref={editorRef}

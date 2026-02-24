@@ -11,6 +11,14 @@ import { java } from '@codemirror/lang-java';
 import { githubDark } from '@uiw/codemirror-theme-github';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const languageExtensions: Record<string, any> = {
+    javascript: javascript(),
+    python: python(),
+    java: java(),
+    cpp: cpp(),
+};
 
 type TestResult = {
     input: string;
@@ -43,6 +51,25 @@ type RoundViewProps = {
     isRound4?: boolean;
 };
 
+// Auto-detect language from question text
+const detectLanguage = (text: string): string => {
+    const lower = text.toLowerCase();
+    if (lower.includes('python')) return '71';
+    if (lower.includes('java') && !lower.includes('javascript')) return '62';
+    if (lower.includes('c++') || lower.includes('cpp')) return '54';
+    return '63'; // Default to JavaScript
+};
+
+const getEditorLanguage = (id: string) => {
+    switch (id) {
+        case '63': return 'javascript';
+        case '71': return 'python';
+        case '62': return 'java';
+        case '54': return 'cpp';
+        default: return 'javascript';
+    }
+};
+
 const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, isRound4 }: RoundViewProps) => {
     const editorRef = useRef<any>(null);
 
@@ -50,6 +77,7 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
     const originalFailingCode = (currentQuestion?.options && currentQuestion.options.length > 0) ? currentQuestion.options[0] : "// No initial code provided.";
 
     // ALL hooks MUST be called before any conditional returns (React rules of hooks)
+    const [languageId, setLanguageId] = useState<string>(() => detectLanguage(currentQuestion?.question_text || ''));
     const [localCode, setLocalCode] = useState<string>(answer && answer.trim().length > 0 ? answer : originalFailingCode);
     const [isRunning, setIsRunning] = useState(false);
     const [testResults, setTestResults] = useState<TestResult[] | null>(null);
@@ -89,7 +117,7 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
             const { data, error } = await supabase.functions.invoke('piston-execute', {
                 body: {
                     source_code: codeToTest,
-                    language_id: 63, // Default to JavaScript for Round 4
+                    language_id: parseInt(languageId, 10),
                     test_cases: testCases,
                 }
             });
@@ -154,11 +182,26 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
             <CardContent className="p-6 space-y-6">
 
                 {/* Terminal Header */}
-                <div className="flex items-center gap-2 font-mono text-sm text-primary mb-4 pb-2 border-b border-primary/20">
-                    <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                    <div className="w-3 h-3 rounded-full bg-green-500" />
-                    <span className="ml-4 opacity-50">root@borderland-arena:~</span>
+                <div className="flex items-center justify-between font-mono text-sm text-primary mb-4 pb-2 border-b border-primary/20">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500" />
+                        <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                        <div className="w-3 h-3 rounded-full bg-green-500" />
+                        <span className="ml-4 opacity-50">root@borderland-arena:~</span>
+                    </div>
+                    {isCodeAutopsy && !isDesignTask && (
+                        <Select value={languageId} onValueChange={setLanguageId}>
+                            <SelectTrigger className="w-[140px] h-7 bg-black/50 border-primary/30 text-xs font-mono text-primary outline-none focus:ring-1 focus:ring-primary shadow-none">
+                                <SelectValue placeholder="Language" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-[#1e1e1e] border-[#333] text-white font-mono min-w-[140px]">
+                                <SelectItem value="63">JavaScript</SelectItem>
+                                <SelectItem value="71">Python</SelectItem>
+                                <SelectItem value="62">Java</SelectItem>
+                                <SelectItem value="54">C++</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    )}
                 </div>
 
                 <div className="font-mono text-green-500 text-sm mb-4">
@@ -188,7 +231,7 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                                 <div className="w-1/2 h-full border-r border-primary/20">
                                     <CodeMirror
                                         value={originalFailingCode}
-                                        extensions={[javascript()]}
+                                        extensions={languageExtensions[getEditorLanguage(languageId)] ? [languageExtensions[getEditorLanguage(languageId)]] : []}
                                         theme={githubDark}
                                         basicSetup={{ lineNumbers: true, foldGutter: false }}
                                         editable={false}
@@ -199,7 +242,7 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                                     <CodeMirror
                                         ref={editorRef}
                                         value={localCode}
-                                        extensions={[javascript()]}
+                                        extensions={languageExtensions[getEditorLanguage(languageId)] ? [languageExtensions[getEditorLanguage(languageId)]] : []}
                                         theme={githubDark}
                                         basicSetup={{ lineNumbers: true }}
                                         onChange={(v) => { setLocalCode(v || ""); setAnswer(v || ""); }}
