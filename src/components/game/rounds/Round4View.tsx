@@ -45,14 +45,12 @@ type RoundViewProps = {
 
 const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, isRound4 }: RoundViewProps) => {
     const editorRef = useRef<any>(null);
-    const [localCode, setLocalCode] = useState<string>(answer || originalFailingCode);
 
-    // Sync localCode when the question or incoming `answer` changes (but avoid clobbering during typing)
-    // Reset to the provided `answer` when the question changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useState(() => {
-        setLocalCode(answer && answer.trim().length > 0 ? answer : originalFailingCode);
-    });
+    // Retrieve original failing code setup in the Admin dashboard via options array
+    const originalFailingCode = (currentQuestion?.options && currentQuestion.options.length > 0) ? currentQuestion.options[0] : "// No initial code provided.";
+
+    // ALL hooks MUST be called before any conditional returns (React rules of hooks)
+    const [localCode, setLocalCode] = useState<string>(answer && answer.trim().length > 0 ? answer : originalFailingCode);
     const [isRunning, setIsRunning] = useState(false);
     const [testResults, setTestResults] = useState<TestResult[] | null>(null);
     const [testsPassed, setTestsPassed] = useState(0);
@@ -63,9 +61,6 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
     // Distinguish between Terminal Task (Bug Hunt) vs Design Task (Figma) vs Code Autopsy
     const isDesignTask = currentQuestion.question_text.toLowerCase().includes("design") || currentQuestion.question_text.toLowerCase().includes("figma");
     const isCodeAutopsy = currentQuestion.question_text.toLowerCase().includes("autopsy") || isRound4; // Default to Autopsy for Round 4
-
-    // Retrieve original failing code setup in the Admin dashboard via options array
-    const originalFailingCode = (currentQuestion.options && currentQuestion.options.length > 0) ? currentQuestion.options[0] : "// No initial code provided.";
 
     // Parse test cases from correct_answer JSON
     const getTestCases = (): { input: string; expected_output: string }[] => {
@@ -189,29 +184,29 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
 
                     {isCodeAutopsy && !isDesignTask ? (
                         <div className="relative z-10 h-[400px] border border-primary/30 rounded overflow-hidden">
-                                <div className="h-full w-full flex">
-                                    <div className="w-1/2 h-full border-r border-primary/20">
-                                        <CodeMirror
-                                            value={originalFailingCode}
-                                            extensions={[javascript()]}
-                                            theme={githubDark}
-                                            basicSetup={{ lineNumbers: true, foldGutter: false }}
-                                            editable={false}
-                                            className="h-full"
-                                        />
-                                    </div>
-                                    <div className="w-1/2 h-full">
-                                        <CodeMirror
-                                            ref={editorRef}
-                                            value={localCode}
-                                            extensions={[javascript()]}
-                                            theme={githubDark}
-                                            basicSetup={{ lineNumbers: true }}
-                                            onChange={(v) => setLocalCode(v || "")}
-                                            className="h-full"
-                                        />
-                                    </div>
+                            <div className="h-full w-full flex">
+                                <div className="w-1/2 h-full border-r border-primary/20">
+                                    <CodeMirror
+                                        value={originalFailingCode}
+                                        extensions={[javascript()]}
+                                        theme={githubDark}
+                                        basicSetup={{ lineNumbers: true, foldGutter: false }}
+                                        editable={false}
+                                        className="h-full"
+                                    />
                                 </div>
+                                <div className="w-1/2 h-full">
+                                    <CodeMirror
+                                        ref={editorRef}
+                                        value={localCode}
+                                        extensions={[javascript()]}
+                                        theme={githubDark}
+                                        basicSetup={{ lineNumbers: true }}
+                                        onChange={(v) => { setLocalCode(v || ""); setAnswer(v || ""); }}
+                                        className="h-full"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     ) : isDesignTask ? (
                         <div className="space-y-4 relative z-10">

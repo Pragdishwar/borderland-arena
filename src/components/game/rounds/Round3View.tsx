@@ -49,8 +49,6 @@ const languageExtensions: Record<string, any> = {
   cpp: cpp(),
 };
 
-const reverseString = (s: string) => s.split("").reverse().join("");
-
 const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, selectedSuit }) => {
   const [languageId, setLanguageId] = useState<string>("63");
   const [isRunning, setIsRunning] = useState(false);
@@ -124,8 +122,6 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
     }
   };
 
-  // Editor input is handled via `onChange` so we maintain a single source of truth for `answer`.
-
   const allTestsPassed = testResults && testsPassed === testsTotal && testsTotal > 0;
 
   return (
@@ -186,22 +182,18 @@ const Round3View: React.FC<RoundViewProps> = ({ currentQuestion, currentQ, total
             </div>
           </div>
 
-          <div className="flex-1 bg-[#1e1e1e] flex flex-col relative w-full h-full min-h-[400px]">
+          {/* Reverse mode: CSS transform mirrors the editor visually, but the actual code stays correct */}
+          <div
+            className="flex-1 bg-[#1e1e1e] flex flex-col relative w-full h-full min-h-[400px]"
+            style={reverseMode ? { transform: 'scaleX(-1)' } : undefined}
+          >
             <CodeMirror
               ref={editorRef}
-              value={reverseMode ? reverseString(answer) : answer}
+              value={answer}
               extensions={languageExtensions[getEditorLanguage(languageId)] ? [languageExtensions[getEditorLanguage(languageId)]] : []}
               theme={githubDark}
               basicSetup={{ lineNumbers: true }}
-              
-              onChange={(value) => {
-                if (reverseMode) {
-                  // `value` is the displayed (reversed) text in the editor — store the unreversed code
-                  setAnswer(value ? reverseString(value) : "");
-                } else {
-                  setAnswer(value || "");
-                }
-              }}
+              onChange={(value) => setAnswer(value || "")}
               className="h-full w-full"
             />
           </div>
