@@ -139,8 +139,8 @@ const Round4View = ({
   // Round 4 is always the debugging (code autopsy) game.
   const isCodeAutopsy = true;
 
-  // Parse test cases from correct_answer JSON
-  const getTestCases = (): { input: string; expected_output: string }[] => {
+  // Parse test cases from correct_answer JSON (supports hidden flag)
+  const getTestCases = (): { input: string; expected_output: string; hidden?: boolean }[] => {
     try {
       const parsed = JSON.parse(currentQuestion.correct_answer);
       if (Array.isArray(parsed)) return parsed;
@@ -150,6 +150,8 @@ const Round4View = ({
 
   const testCases = getTestCases();
   const hasTestCases = testCases.length > 0;
+  const visibleTestCases = testCases.filter(tc => !tc.hidden);
+  const hiddenCount = testCases.length - visibleTestCases.length;
 
   const maxPoints = currentQuestion?.points || 0;
 
@@ -370,41 +372,34 @@ const Round4View = ({
           {/* Test Results Panel */}
           {testResults && (
             <div className="relative z-10 mt-4 space-y-2 border-t border-primary/20 pt-4">
-              <div
-                className={`flex items-center gap-2 text-sm font-mono ${testsPassed === testsTotal ? "text-green-400" : "text-red-400"}`}
-              >
-                <CheckCircle className="w-4 h-4" />
-                {testsPassed}/{testsTotal} Tests Passed
-              </div>
-              {testResults.map((r, i) => (
-                <div
-                  key={i}
-                  className={`p-2 rounded text-xs font-mono border ${r.passed ? "bg-green-500/10 border-green-500/30 text-green-300" : "bg-red-500/10 border-red-500/30 text-red-300"}`}
-                >
-                  <div className="flex items-center gap-1 mb-1">
-                    <span
-                      className={r.passed ? "text-green-400" : "text-red-400"}
-                    >
-                      {r.passed ? "✓" : "✗"}
-                    </span>
-                    <span>Test {i + 1}</span>
+              {(() => {
+                const visibleResults = testResults.filter((_, i) => !testCases[i]?.hidden);
+                const visiblePassed = visibleResults.filter(r => r.passed).length;
+                const visibleTotal = visibleResults.length;
+                return (
+                  <div>
+                    <div className={`flex items-center gap-2 text-sm font-mono ${visiblePassed === visibleTotal && visibleTotal > 0 ? "text-green-400" : "text-red-400"}`}>
+                      <CheckCircle className="w-4 h-4" />
+                      {visiblePassed}/{visibleTotal} Visible Tests Passed{hiddenCount > 0 ? ` (+${hiddenCount} hidden)` : ''}
+                    </div>
+                    {visibleResults.map(r => {
+                      const origIndex = testResults.indexOf(r);
+                      return (
+                        <div key={origIndex} className={`p-2 rounded text-xs font-mono border ${r.passed ? "bg-green-500/10 border-green-500/30 text-green-300" : "bg-red-500/10 border-red-500/30 text-red-300"}`}>
+                          <div className="flex items-center gap-1 mb-1">
+                            <span className={r.passed ? "text-green-400" : "text-red-400"}>{r.passed ? "✓" : "✗"}</span>
+                            <span>Test {origIndex + 1}</span>
+                          </div>
+                          {r.input && <p className="text-[10px] text-white/50">Input: {r.input}</p>}
+                          <p className="text-[10px] text-white/50">Expected: {r.expected}</p>
+                          <p className="text-[10px] text-white/50">Got: {r.actual || "(empty)"}</p>
+                          {r.error && <p className="text-[10px] text-red-400 mt-1">{r.error}</p>}
+                        </div>
+                      );
+                    })}
                   </div>
-                  {r.input && (
-                    <p className="text-[10px] text-white/50">
-                      Input: {r.input}
-                    </p>
-                  )}
-                  <p className="text-[10px] text-white/50">
-                    Expected: {r.expected}
-                  </p>
-                  <p className="text-[10px] text-white/50">
-                    Got: {r.actual || "(empty)"}
-                  </p>
-                  {r.error && (
-                    <p className="text-[10px] text-red-400 mt-1">{r.error}</p>
-                  )}
-                </div>
-              ))}
+                );
+              })()}
             </div>
           )}
         </div>

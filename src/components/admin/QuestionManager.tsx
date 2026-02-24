@@ -33,7 +33,7 @@ const QuestionManager = ({ gameId }: Props) => {
   const [editingSlot, setEditingSlot] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ question_text: "", correct_answer: "", points: 10, question_type: "text", options: ["", "", "", ""] as string[], image_url: "" as string });
-  const [testCases, setTestCases] = useState<{ input: string; expected_output: string }[]>([{ input: "", expected_output: "" }]);
+  const [testCases, setTestCases] = useState<{ input: string; expected_output: string; hidden?: boolean }[]>([{ input: "", expected_output: "", hidden: false }]);
   const [uploading, setUploading] = useState(false);
   const [games, setGames] = useState<any[]>([]);
   const [cloneSourceId, setCloneSourceId] = useState("");
@@ -209,18 +209,18 @@ const QuestionManager = ({ gameId }: Props) => {
         try {
           const parsed = JSON.parse(existing.correct_answer);
           if (Array.isArray(parsed)) {
-            setTestCases(parsed.map((tc: any) => ({ input: tc.input || "", expected_output: tc.expected_output || "" })));
+            setTestCases(parsed.map((tc: any) => ({ input: tc.input || "", expected_output: tc.expected_output || "", hidden: !!tc.hidden })));
           } else {
-            setTestCases([{ input: "", expected_output: "" }]);
+            setTestCases([{ input: "", expected_output: "", hidden: false }]);
           }
         } catch {
-          setTestCases([{ input: "", expected_output: "" }]);
+          setTestCases([{ input: "", expected_output: "", hidden: false }]);
         }
       }
     } else {
       setEditingId(null);
       setForm({ question_text: "", correct_answer: "", points: isRound4 ? 20 : 10, question_type: "text", options: ["", "", "", ""], image_url: "" });
-      setTestCases([{ input: "", expected_output: "" }]);
+      setTestCases([{ input: "", expected_output: "", hidden: false }]);
     }
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
   };
@@ -229,7 +229,7 @@ const QuestionManager = ({ gameId }: Props) => {
     setEditingSlot(null);
     setEditingId(null);
     setForm({ question_text: "", correct_answer: "", points: isRound4 ? 20 : 10, question_type: "text", options: ["", "", "", ""], image_url: "" });
-    setTestCases([{ input: "", expected_output: "" }]);
+    setTestCases([{ input: "", expected_output: "", hidden: false }]);
   };
 
   const filledCount = questions.length;
@@ -387,7 +387,7 @@ const QuestionManager = ({ gameId }: Props) => {
                 <div className="bg-primary/10 border border-primary/20 p-3 rounded-md space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-primary font-mono">Test Cases (stdin → expected stdout)</p>
-                    <Button size="sm" variant="ghost" className="text-primary h-7 text-xs" onClick={() => setTestCases(tc => [...tc, { input: "", expected_output: "" }])}>
+                    <Button size="sm" variant="ghost" className="text-primary h-7 text-xs" onClick={() => setTestCases(tc => [...tc, { input: "", expected_output: "", hidden: false }])}>
                       <Plus className="h-3 w-3 mr-1" /> Add Test
                     </Button>
                   </div>
@@ -406,6 +406,12 @@ const QuestionManager = ({ gameId }: Props) => {
                           onChange={e => { const n = [...testCases]; n[idx] = { ...n[idx], expected_output: e.target.value }; setTestCases(n); }}
                           className="bg-black/80 border-primary/20 font-mono text-xs h-8"
                         />
+                        <div className="flex items-center gap-3 mt-1">
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <input type="checkbox" checked={!!tc.hidden} onChange={e => { const n = [...testCases]; n[idx] = { ...n[idx], hidden: e.target.checked }; setTestCases(n); }} />
+                            Hidden
+                          </label>
+                        </div>
                       </div>
                       {testCases.length > 1 && (
                         <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive mt-1" onClick={() => setTestCases(tc => tc.filter((_, i) => i !== idx))}>
@@ -438,7 +444,7 @@ const QuestionManager = ({ gameId }: Props) => {
                 <div className="bg-primary/10 border border-primary/20 p-3 rounded-md space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-primary font-mono">Test Cases (stdin → expected stdout)</p>
-                    <Button size="sm" variant="ghost" className="text-primary h-7 text-xs" onClick={() => setTestCases(tc => [...tc, { input: "", expected_output: "" }])}>
+                    <Button size="sm" variant="ghost" className="text-primary h-7 text-xs" onClick={() => setTestCases(tc => [...tc, { input: "", expected_output: "", hidden: false }])}>
                       <Plus className="h-3 w-3 mr-1" /> Add Test
                     </Button>
                   </div>
@@ -457,6 +463,12 @@ const QuestionManager = ({ gameId }: Props) => {
                           onChange={e => { const n = [...testCases]; n[idx] = { ...n[idx], expected_output: e.target.value }; setTestCases(n); }}
                           className="bg-black/80 border-primary/20 font-mono text-xs h-8"
                         />
+                        <div className="flex items-center gap-3 mt-1">
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <input type="checkbox" checked={!!tc.hidden} onChange={e => { const n = [...testCases]; n[idx] = { ...n[idx], hidden: e.target.checked }; setTestCases(n); }} />
+                            Hidden
+                          </label>
+                        </div>
                       </div>
                       {testCases.length > 1 && (
                         <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive mt-1" onClick={() => setTestCases(tc => tc.filter((_, i) => i !== idx))}>

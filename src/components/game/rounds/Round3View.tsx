@@ -97,7 +97,7 @@ const Round3View: React.FC<RoundViewProps> = ({
     }
   };
 
-  const getTestCases = (): { input: string; expected_output: string }[] => {
+  const getTestCases = (): { input: string; expected_output: string; hidden?: boolean }[] => {
     try {
       const parsed = JSON.parse(currentQuestion.correct_answer);
       if (Array.isArray(parsed)) return parsed;
@@ -107,6 +107,8 @@ const Round3View: React.FC<RoundViewProps> = ({
 
   const testCases = getTestCases();
   const hasTestCases = testCases.length > 0;
+  const visibleTestCases = testCases.filter(tc => !tc.hidden);
+  const hiddenCount = testCases.length - visibleTestCases.length;
 
   useEffect(() => {
     // Clear the previous question's results when moving to a new question.
@@ -212,7 +214,7 @@ const Round3View: React.FC<RoundViewProps> = ({
           <div className="flex items-center gap-3">
             {hasTestCases && (
               <span className="text-xs font-mono text-muted-foreground">
-                {testCases.length} test{testCases.length !== 1 ? "s" : ""}
+                {visibleTestCases.length} visible{hiddenCount > 0 ? ` (+${hiddenCount} hidden)` : ''} test{visibleTestCases.length !== 1 ? "s" : ""}
               </span>
             )}
             <span className="text-xs font-mono text-muted-foreground">
@@ -240,45 +242,35 @@ const Round3View: React.FC<RoundViewProps> = ({
 
               {testResults && (
                 <div className="mt-4 space-y-2">
-                  <div
-                    className={`flex items-center gap-2 text-sm font-mono ${allTestsPassed ? "text-green-400" : "text-red-400"}`}
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    {testsPassed}/{testsTotal} Tests Passed
-                  </div>
-                  {testResults.map((r, i) => (
-                    <div
-                      key={i}
-                      className={`p-2 rounded text-xs font-mono border ${r.passed ? "bg-green-500/10 border-green-500/30 text-green-300" : "bg-red-500/10 border-red-500/30 text-red-300"}`}
-                    >
-                      <div className="flex items-center gap-1 mb-1">
-                        <span
-                          className={
-                            r.passed ? "text-green-400" : "text-red-400"
-                          }
-                        >
-                          {r.passed ? "✓" : "✗"}
-                        </span>
-                        <span>Test {i + 1}</span>
+                  {(() => {
+                    const visibleResults = testResults.filter((_, i) => !testCases[i]?.hidden);
+                    const visiblePassed = visibleResults.filter(r => r.passed).length;
+                    const visibleTotal = visibleResults.length;
+                    const anyVisiblePassedAll = visibleResults.length > 0 && visiblePassed === visibleTotal;
+                    return (
+                      <div>
+                        <div className={`flex items-center gap-2 text-sm font-mono ${anyVisiblePassedAll ? "text-green-400" : "text-red-400"}`}>
+                          <CheckCircle className="w-4 h-4" />
+                          {visiblePassed}/{visibleTotal} Visible Tests Passed
+                        </div>
+                        {visibleResults.map((r) => {
+                          const origIndex = testResults.indexOf(r);
+                          return (
+                            <div key={origIndex} className={`p-2 rounded text-xs font-mono border ${r.passed ? "bg-green-500/10 border-green-500/30 text-green-300" : "bg-red-500/10 border-red-500/30 text-red-300"}`}>
+                              <div className="flex items-center gap-1 mb-1">
+                                <span className={r.passed ? "text-green-400" : "text-red-400"}>{r.passed ? "✓" : "✗"}</span>
+                                <span>Test {origIndex + 1}</span>
+                              </div>
+                              {r.input && <p className="text-[10px] text-white/50">Input: {r.input}</p>}
+                              <p className="text-[10px] text-white/50">Expected: {r.expected}</p>
+                              <p className="text-[10px] text-white/50">Got: {r.actual || "(empty)"}</p>
+                              {r.error && <p className="text-[10px] text-red-400 mt-1">{r.error}</p>}
+                            </div>
+                          );
+                        })}
                       </div>
-                      {r.input && (
-                        <p className="text-[10px] text-white/50">
-                          Input: {r.input}
-                        </p>
-                      )}
-                      <p className="text-[10px] text-white/50">
-                        Expected: {r.expected}
-                      </p>
-                      <p className="text-[10px] text-white/50">
-                        Got: {r.actual || "(empty)"}
-                      </p>
-                      {r.error && (
-                        <p className="text-[10px] text-red-400 mt-1">
-                          {r.error}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })()}
                 </div>
               )}
             </div>
