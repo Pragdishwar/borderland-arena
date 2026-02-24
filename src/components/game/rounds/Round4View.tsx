@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -83,6 +83,17 @@ const Round4View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
     const [testResults, setTestResults] = useState<TestResult[] | null>(null);
     const [testsPassed, setTestsPassed] = useState(0);
     const [testsTotal, setTestsTotal] = useState(0);
+
+    // Reset editor state when the question changes
+    useEffect(() => {
+        const newCode = (currentQuestion?.options && currentQuestion.options.length > 0) ? currentQuestion.options[0] : "// No initial code provided.";
+        setLocalCode(newCode);
+        setAnswer(newCode);
+        setLanguageId(detectLanguage(currentQuestion?.question_text || ''));
+        setTestResults(null);
+        setTestsPassed(0);
+        setTestsTotal(0);
+    }, [currentQuestion?.id]);
 
     if (!currentQuestion) return null;
 
