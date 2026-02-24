@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Users, Skull, CheckCircle, Loader2, Maximize2 } from "lucide-react";
+import { Users, Skull, CheckCircle, Loader2, Maximize2, ChevronLeft, ChevronRight, SkipForward } from "lucide-react";
 import PlayingCard from "@/components/game/PlayingCard";
 import QuestionModal from "@/components/game/QuestionModal";
 import OrbitalTimer from "@/components/game/OrbitalTimer";
@@ -250,27 +250,78 @@ const GamePlay = () => {
       // Hide the correct answers from the players to prevent team leakage!
       toast({ title: "Answer Encrypted & Locked", description: "Awaiting final round tabulation..." });
 
-      const nextQIndex = currentQ + 1;
-      await supabase.from("round_scores").update({
-        score: newScore,
-        answer_time_seconds: newTotalTime,
-        current_q_index: nextQIndex
-      }).eq("team_id", teamId!).eq("game_id", gameId!).eq("round_number", currentRound);
-
       setAnswer("");
+      const nextQIndex = currentQ + 1;
       if (nextQIndex < questions.length) {
         setCurrentQ(nextQIndex);
         setQuestionStartTime(Date.now());
       } else {
-        setRoundComplete(true);
-        setFrozenTime(timeLeft);
-        setShowResults(true);
-        toast({ title: "Round complete!", description: "Awaiting admin confirmation." });
+        // Check if there are any unsolved questions to go back to
+        const unsolvedIndex = questions.findIndex((_, idx) => !completedQRef.current.has(idx));
+        if (unsolvedIndex !== -1) {
+          setCurrentQ(unsolvedIndex);
+          setQuestionStartTime(Date.now());
+          toast({ title: "Questions remaining", description: `Navigated to unsolved question ${unsolvedIndex + 1}.` });
+        } else {
+          setRoundComplete(true);
+          setFrozenTime(timeLeft);
+          setShowResults(true);
+          toast({ title: "Round complete!", description: "Awaiting admin confirmation." });
+        }
       }
+
+      // Update DB with the furthest reached index
+      const furthestIndex = Math.max(nextQIndex, currentQ + 1);
+      await supabase.from("round_scores").update({
+        score: newScore,
+        answer_time_seconds: newTotalTime,
+        current_q_index: furthestIndex
+      }).eq("team_id", teamId!).eq("game_id", gameId!).eq("round_number", currentRound);
     } finally {
       setIsSubmitting(false);
       isSubmittingRef.current = false;
     }
+  };
+
+  // Navigate to a specific question (only if not already completed)
+  const goToQuestion = (index: number) => {
+    if (index < 0 || index >= questions.length) return;
+    if (completedQRef.current.has(index)) {
+      toast({ title: "Already submitted", description: `Question ${index + 1} was already answered.` });
+      return;
+    }
+    setCurrentQ(index);
+    setAnswer("");
+    setQuestionStartTime(Date.now());
+  };
+
+  const skipQuestion = () => {
+    // Find the next unsolved question after current
+    for (let i = currentQ + 1; i < questions.length; i++) {
+      if (!completedQRef.current.has(i)) {
+        goToQuestion(i);
+        return;
+      }
+    }
+    // Wrap around: find unsolved before current
+    for (let i = 0; i < currentQ; i++) {
+      if (!completedQRef.current.has(i)) {
+        goToQuestion(i);
+        return;
+      }
+    }
+    toast({ title: "No more questions", description: "All questions have been answered." });
+  };
+
+  const prevQuestion = () => {
+    // Find the previous unsolved question
+    for (let i = currentQ - 1; i >= 0; i--) {
+      if (!completedQRef.current.has(i)) {
+        goToQuestion(i);
+        return;
+      }
+    }
+    toast({ title: "No previous unsolved questions" });
   };
 
   const renderLeaderboardUI = () => {
@@ -486,7 +537,57 @@ const GamePlay = () => {
                 transition={{ duration: 0.5, delay: 0.2 }}
                 className="w-full"
               >
-                {questions.length > 0 && currentQ < questions.length ? renderRoundView() : (
+                {questions.length > 0 && currentQ < questions.length ? (
+                  <div className="w-full space-y-4">
+                    {/* Question Progress Dots */}
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      {questions.map((_, idx) => {
+                        const isCompleted = completedQRef.current.has(idx);
+                        const isCurrent = idx === currentQ;
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => !isCompleted && goToQuestion(idx)}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono font-bold transition-all
+                              ${isCurrent ? 'bg-primary text-black scale-110 ring-2 ring-primary/50' : ''}
+                              ${isCompleted ? 'bg-green-500/80 text-black cursor-not-allowed' : ''}
+                              ${!isCurrent && !isCompleted ? 'bg-white/10 text-white/50 hover:bg-white/20 cursor-pointer' : ''}
+                            `}
+                            title={isCompleted ? `Q${idx + 1} ✓ Submitted` : `Go to Q${idx + 1}`}
+                          >
+                            {isCompleted ? '✓' : idx + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Navigation Buttons */}
+                    <div className="flex items-center justify-between">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={prevQuestion}
+                        className="text-muted-foreground hover:text-primary font-mono text-xs"
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" /> PREV
+                      </Button>
+                      <span className="text-xs font-mono text-muted-foreground">
+                        Q{currentQ + 1}/{questions.length} — {completedQRef.current.size} answered
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={skipQuestion}
+                        className="text-muted-foreground hover:text-primary font-mono text-xs"
+                      >
+                        SKIP <SkipForward className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
+
+                    {/* Round View */}
+                    {renderRoundView()}
+                  </div>
+                ) : (
                   <Card className="glass-card w-full">
                     <CardContent className="p-12 text-center">
                       <p className="font-display text-xl text-muted-foreground">Initializing Module...</p>
