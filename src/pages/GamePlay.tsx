@@ -449,8 +449,9 @@ const GamePlay = () => {
 
   if (gameStatus === "finished") { navigate("/game/results"); return null; }
 
-  // Total allowed time per round (placeholder logic, assuming 60 minutes)
-  const TOTAL_ROUND_TIME = 60 * 60;
+  // Per-round time limits in seconds
+  const ROUND_TIMES: Record<number, number> = { 1: 10 * 60, 2: 20 * 60, 3: 30 * 60, 4: 30 * 60 };
+  const TOTAL_ROUND_TIME = ROUND_TIMES[currentRound] || 30 * 60;
 
   if (gameStatus === "waiting") {
     return (

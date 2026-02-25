@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle } from "lucide-react";
-import { useState, useEffect } from "react";
 type QuestionType = {
     id?: string;
     question_text: string;
@@ -26,19 +25,6 @@ type RoundViewProps = {
 };
 
 const Round1View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnswer, submitAnswer, isSubmitting, selectedSuit }: RoundViewProps) => {
-    const [timeLeft, setTimeLeft] = useState(10); // 10 seconds visual timer
-
-    useEffect(() => {
-        setTimeLeft(10);
-    }, [currentQ]);
-
-    useEffect(() => {
-        if (timeLeft <= 0) return;
-        const timer = setInterval(() => {
-            setTimeLeft(prev => prev - 0.1);
-        }, 100);
-        return () => clearInterval(timer);
-    }, [timeLeft]);
 
     if (!currentQuestion) return null;
 
@@ -61,15 +47,6 @@ const Round1View = ({ currentQuestion, currentQ, totalQuestions, answer, setAnsw
                         </div>
                     </div>
                     <div className="ml-auto flex items-center gap-2">
-                        <div className="flex flex-col items-end mr-4">
-                            <div className="text-xs text-muted-foreground font-mono mb-1">TIME REMAINING</div>
-                            <div className="w-32 h-2 bg-secondary rounded-full overflow-hidden">
-                                <div
-                                    className={`h-full transition-all duration-100 ease-linear ${timeLeft < 3 ? 'bg-destructive' : 'bg-primary'}`}
-                                    style={{ width: `${Math.max(0, (timeLeft / 10) * 100)}%` }}
-                                />
-                            </div>
-                        </div>
                         <span className="bg-primary/20 text-primary px-3 py-1 rounded text-sm font-bold border border-primary/30">
                             {currentQuestion.points} PTS
                         </span>

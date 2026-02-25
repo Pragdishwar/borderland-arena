@@ -58,8 +58,8 @@ serve(async (req) => {
         }
 
         // Surgical Scoring Formula
-        const baseScore = 1000;
-        const penaltyPerLine = 50;
+        const baseScore = 110;
+        const penaltyPerLine = 10;
 
         // Only calculate score on success
         const finalScore = passed ? Math.max(0, baseScore - (lines_changed * penaltyPerLine)) : 0;
