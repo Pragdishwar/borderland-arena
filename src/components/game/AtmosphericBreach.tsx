@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner"; // Assuming sonner or use-toast is used
+import { useAudio } from "@/hooks/use-audio";
 
 type AtmosphericBreachProps = {
     active: boolean;
@@ -13,6 +14,7 @@ type AtmosphericBreachProps = {
 const AtmosphericBreach = ({ active, teamId, gameId }: AtmosphericBreachProps) => {
     const [breachDetected, setBreachDetected] = useState(false);
     const [disqualified, setDisqualified] = useState(false);
+    const { play, stop } = useAudio();
 
     useEffect(() => {
         if (!teamId) return;
@@ -43,8 +45,17 @@ const AtmosphericBreach = ({ active, teamId, gameId }: AtmosphericBreachProps) =
 
         return () => {
             supabase.removeChannel(channel);
+            stop('alarm');
         };
-    }, [teamId]);
+    }, [teamId, stop]);
+
+    useEffect(() => {
+        if (breachDetected || disqualified) {
+            play('alarm', { loop: true, volume: 0.5 });
+        } else {
+            stop('alarm');
+        }
+    }, [breachDetected, disqualified, play, stop]);
 
     useEffect(() => {
         if (!active || disqualified) return;

@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAudio } from "@/hooks/use-audio";
 
 type TestResult = {
   input: string;
@@ -69,6 +70,7 @@ const Round3View: React.FC<RoundViewProps> = ({
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
   const [testsPassed, setTestsPassed] = useState(0);
   const [testsTotal, setTestsTotal] = useState(0);
+  const { play } = useAudio();
 
   const resetTestState = useCallback(() => {
     setTestResults(null);
@@ -101,7 +103,7 @@ const Round3View: React.FC<RoundViewProps> = ({
     try {
       const parsed = JSON.parse(currentQuestion.correct_answer);
       if (Array.isArray(parsed)) return parsed;
-    } catch {}
+    } catch { }
     return [];
   };
 
@@ -136,11 +138,13 @@ const Round3View: React.FC<RoundViewProps> = ({
       setTestsPassed(data.passed || 0);
       setTestsTotal(data.total || 0);
       if (data.passed === data.total) {
+        play('success');
         toast({
           title: "ALL TESTS PASSED",
           description: `${data.passed}/${data.total} test cases passed.`,
         });
       } else {
+        play('error');
         toast({
           title: "SOME TESTS FAILED",
           description: `${data.passed}/${data.total} test cases passed.`,
@@ -155,6 +159,7 @@ const Round3View: React.FC<RoundViewProps> = ({
         description: e.message,
         variant: "destructive",
       });
+      play('error');
     } finally {
       setIsRunning(false);
     }

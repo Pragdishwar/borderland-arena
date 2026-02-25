@@ -33,7 +33,7 @@ type Team = {
   ban_count: number;
 };
 
-const ROUND_NAMES: Record<number, string> = { 1: "MCQ", 2: "Execution Trace", 3: "The Compiler", 4: "Code Autopsy" };
+const ROUND_NAMES: Record<number, string> = { 1: "Entry Game", 2: "Execution Trace", 3: "Reverse Compiler", 4: "Code Autopsy" };
 const ROUND_TIMES: Record<number, number> = { 1: 10 * 60, 2: 20 * 60, 3: 30 * 60, 4: 30 * 60 };
 
 const AdminDashboard = () => {
