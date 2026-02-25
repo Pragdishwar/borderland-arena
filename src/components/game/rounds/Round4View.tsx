@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAudio } from "@/hooks/use-audio";
 
 const languageExtensions: Record<string, any> = {
   javascript: javascript(),
@@ -114,6 +115,7 @@ const Round4View = ({
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
   const [testsPassed, setTestsPassed] = useState(0);
   const [testsTotal, setTestsTotal] = useState(0);
+  const { play } = useAudio();
 
   const resetTestState = () => {
     setTestResults(null);
@@ -144,7 +146,7 @@ const Round4View = ({
     try {
       const parsed = JSON.parse(currentQuestion.correct_answer);
       if (Array.isArray(parsed)) return parsed;
-    } catch {}
+    } catch { }
     return [];
   };
 
@@ -207,11 +209,13 @@ const Round4View = ({
       setTestsTotal(data.total || 0);
 
       if (data.passed === data.total) {
+        play('success');
         toast({
           title: "ALL TESTS PASSED",
           description: `${data.passed}/${data.total} test cases passed.`,
         });
       } else {
+        play('error');
         toast({
           title: "SOME TESTS FAILED",
           description: `${data.passed}/${data.total} test cases passed.`,
@@ -226,6 +230,7 @@ const Round4View = ({
         description: e.message,
         variant: "destructive",
       });
+      play('error');
     } finally {
       setIsRunning(false);
     }

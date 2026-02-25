@@ -11,6 +11,7 @@ import PlayingCard from "@/components/game/PlayingCard";
 import QuestionModal from "@/components/game/QuestionModal";
 import OrbitalTimer from "@/components/game/OrbitalTimer";
 import AtmosphericBreach from "@/components/game/AtmosphericBreach";
+import { useAudio } from "@/hooks/use-audio";
 
 // Import Round Views (to be created)
 import Round1View from "@/components/game/rounds/Round1View";
@@ -69,10 +70,12 @@ const GamePlay = () => {
   const [pausedAt, setPausedAt] = useState<string | null>(null);
   const [suitChosenAt, setSuitChosenAt] = useState<string | null>(null);
   const [timeExpired, setTimeExpired] = useState(false);
+  const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   const isSubmittingRef = useRef(false);
   const completedQRef = useRef<Set<number>>(new Set());
   const draftAnswersRef = useRef<Map<number, string>>(new Map());
   const questionScoresRef = useRef<Map<number, number>>(new Map());
+  const { play } = useAudio();
 
   // Duplicate tab detection — only one tab per team allowed
   useEffect(() => {
@@ -162,7 +165,7 @@ const GamePlay = () => {
         setPausedAt(g.paused_at as string | null);
         setTotalPausedSeconds(g.total_paused_seconds as number || 0);
         if (g.status === "between_rounds" || g.status === "finished") {
-          autoSubmitDrafts();
+          setShouldAutoSubmit(true);
           setShowResults(true);
           fetchLeaderboard();
         }
@@ -206,7 +209,7 @@ const GamePlay = () => {
       // Auto-lock when time exceeds the round limit
       if (clamped >= limit) {
         // Auto-submit any draft answers before locking
-        autoSubmitDrafts();
+        setShouldAutoSubmit(true);
         setTimeExpired(true);
         setFrozenTime(limit);
         setRoundComplete(true);
@@ -242,6 +245,7 @@ const GamePlay = () => {
   };
 
   const selectOperative = async (memberId: string) => {
+    play('click');
     setActiveMemberId(memberId);
     await supabase.from("round_scores").upsert(
       { team_id: teamId!, game_id: gameId!, round_number: currentRound, active_member_id: memberId, score: 0 },
@@ -251,6 +255,7 @@ const GamePlay = () => {
 
   const selectSuit = async (suit: string) => {
     if (suitLocked || !activeMemberId) return;
+    play('click');
     setSelectedSuit(suit);
     setSuitLocked(true);
     const chosenAtNow = new Date().toISOString();
@@ -270,6 +275,7 @@ const GamePlay = () => {
     // Lock synchronously to prevent rapid-fire Enter spam
     isSubmittingRef.current = true;
     setIsSubmitting(true);
+    play('submit');
 
     try {
       // Allow overriding the answer from the view
@@ -414,6 +420,13 @@ const GamePlay = () => {
     }
   };
 
+  // Trigger-based auto-submit: runs with fresh state when flag is set
+  useEffect(() => {
+    if (!shouldAutoSubmit) return;
+    setShouldAutoSubmit(false);
+    autoSubmitDrafts();
+  }, [shouldAutoSubmit]);
+
   // Navigate to a specific question
   const goToQuestion = (index: number) => {
     if (index < 0 || index >= questions.length) return;
@@ -429,6 +442,7 @@ const GamePlay = () => {
   };
 
   const skipQuestion = () => {
+    play('click');
     // Find the next unsolved question after current
     for (let i = currentQ + 1; i < questions.length; i++) {
       if (!completedQRef.current.has(i)) {
@@ -447,6 +461,7 @@ const GamePlay = () => {
   };
 
   const prevQuestion = () => {
+    play('click');
     // Find the previous unsolved question
     for (let i = currentQ - 1; i >= 0; i--) {
       if (!completedQRef.current.has(i)) {
@@ -594,7 +609,7 @@ const GamePlay = () => {
         <div className="flex items-center justify-between glass-card p-4 rounded-xl">
           <div>
             <h2 className="font-display text-xl text-primary tracking-wider">
-              ROUND {currentRound} — {currentRound === 1 ? "Entry Game" : currentRound === 2 ? "Mind Trap" : currentRound === 3 ? "Betrayal Stage" : "Final Showdown"}
+              ROUND {currentRound} — {currentRound === 1 ? "Entry Game" : currentRound === 2 ? "Execution Trace" : currentRound === 3 ? "Reverse Compiler" : "Code Autopsy"}
             </h2>
             <p className="font-body text-muted-foreground">Team Score: {score}</p>
           </div>
