@@ -162,6 +162,7 @@ const GamePlay = () => {
         setPausedAt(g.paused_at as string | null);
         setTotalPausedSeconds(g.total_paused_seconds as number || 0);
         if (g.status === "between_rounds" || g.status === "finished") {
+          autoSubmitDrafts();
           setShowResults(true);
           fetchLeaderboard();
         }
@@ -204,6 +205,8 @@ const GamePlay = () => {
 
       // Auto-lock when time exceeds the round limit
       if (clamped >= limit) {
+        // Auto-submit any draft answers before locking
+        autoSubmitDrafts();
         setTimeExpired(true);
         setFrozenTime(limit);
         setRoundComplete(true);
@@ -257,11 +260,12 @@ const GamePlay = () => {
     if (qs) { setQuestions(qs as Question[]); setQuestionStartTime(Date.now()); setTotalAnswerTime(0); }
   };
 
-  const submitAnswer = async (submittedAnswer: string) => {
-    if (!questions[currentQ] || isSubmitting || isSubmittingRef.current || timeExpired) return;
+  const submitAnswer = async (submittedAnswer: string, force = false, questionIndex?: number) => {
+    const qIdx = questionIndex !== undefined ? questionIndex : currentQ;
+    if (!questions[qIdx] || isSubmitting || isSubmittingRef.current || (!force && timeExpired)) return;
     // Only allow re-submission in rounds 3 and 4
     const allowResubmit = currentRound === 3 || currentRound === 4;
-    if (!allowResubmit && completedQRef.current.has(currentQ)) return;
+    if (!allowResubmit && completedQRef.current.has(qIdx)) return;
 
     // Lock synchronously to prevent rapid-fire Enter spam
     isSubmittingRef.current = true;
@@ -270,7 +274,7 @@ const GamePlay = () => {
     try {
       // Allow overriding the answer from the view
       let finalAnswer = submittedAnswer || answer;
-      const q = questions[currentQ];
+      const q = questions[qIdx];
 
       let earned = 0;
       let isTestCasePipelinePayload = false;
@@ -296,13 +300,13 @@ const GamePlay = () => {
       }
 
       // Best-score-wins: only increase if new score is higher than previous attempt
-      const previousBest = questionScoresRef.current.get(currentQ) || 0;
-      const isResubmission = completedQRef.current.has(currentQ);
+      const previousBest = questionScoresRef.current.get(qIdx) || 0;
+      const isResubmission = completedQRef.current.has(qIdx);
 
       if (earned > previousBest) {
         // New score is better — update the difference
         const scoreDelta = earned - previousBest;
-        questionScoresRef.current.set(currentQ, earned);
+        questionScoresRef.current.set(qIdx, earned);
         const newScore = score + scoreDelta;
         setScore(newScore);
 
@@ -318,14 +322,14 @@ const GamePlay = () => {
         await supabase.from("round_scores").update({
           score: newScore,
           answer_time_seconds: newTotalTime,
-          current_q_index: Math.max(currentQ + 1, ...Array.from(completedQRef.current).map(i => i + 1))
+          current_q_index: Math.max(qIdx + 1, ...Array.from(completedQRef.current).map(i => i + 1))
         }).eq("team_id", teamId!).eq("game_id", gameId!).eq("round_number", currentRound);
       } else {
         // Score not better
         if (isResubmission) {
           toast({ title: "No improvement", description: `Previous best: ${previousBest} pts. This attempt: ${earned} pts. Keeping best score.` });
         } else {
-          questionScoresRef.current.set(currentQ, earned);
+          questionScoresRef.current.set(qIdx, earned);
           const newScore = score + earned;
           setScore(newScore);
           toast({ title: "Answer Encrypted & Locked", description: "Awaiting final round tabulation..." });
@@ -336,19 +340,19 @@ const GamePlay = () => {
           await supabase.from("round_scores").update({
             score: newScore,
             answer_time_seconds: newTotalTime,
-            current_q_index: Math.max(currentQ + 1, ...Array.from(completedQRef.current).map(i => i + 1))
+            current_q_index: Math.max(qIdx + 1, ...Array.from(completedQRef.current).map(i => i + 1))
           }).eq("team_id", teamId!).eq("game_id", gameId!).eq("round_number", currentRound);
         }
       }
 
       // Mark as completed
-      completedQRef.current.add(currentQ);
+      completedQRef.current.add(qIdx);
       // Clear draft for this question
-      draftAnswersRef.current.delete(currentQ);
+      draftAnswersRef.current.delete(qIdx);
 
-      const nextQIndex = currentQ + 1;
-      // Only auto-advance if this was a first-time submission
-      if (!isResubmission) {
+      const nextQIndex = qIdx + 1;
+      // Only auto-advance if this was a first-time submission and not a forced auto-submit
+      if (!isResubmission && !force) {
         if (nextQIndex < questions.length) {
           // Find next unsolved question
           let nextUnsolved = -1;
@@ -390,6 +394,23 @@ const GamePlay = () => {
     } finally {
       setIsSubmitting(false);
       isSubmittingRef.current = false;
+    }
+  };
+
+  // Auto-submit all draft (unsubmitted) answers when the round ends
+  const autoSubmitDrafts = async () => {
+    // Save the current in-progress answer as a draft first
+    if (answer && answer.trim()) {
+      draftAnswersRef.current.set(currentQ, answer);
+    }
+
+    for (let i = 0; i < questions.length; i++) {
+      if (completedQRef.current.has(i)) continue; // already submitted
+      const draft = draftAnswersRef.current.get(i);
+      if (!draft || !draft.trim()) continue; // no draft for this question
+
+      // Submit the draft for question i directly via the questionIndex parameter
+      await submitAnswer(draft, true, i);
     }
   };
 
