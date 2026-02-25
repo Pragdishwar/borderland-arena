@@ -64,6 +64,10 @@ const GamePlay = () => {
   const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; total_score: number; is_disqualified: boolean; ban_count: number }[]>([]);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [playedMemberIds, setPlayedMemberIds] = useState<string[]>([]);
+  const [isPaused, setIsPaused] = useState(false);
+  const [totalPausedSeconds, setTotalPausedSeconds] = useState(0);
+  const [pausedAt, setPausedAt] = useState<string | null>(null);
+  const [suitChosenAt, setSuitChosenAt] = useState<string | null>(null);
   const isSubmittingRef = useRef(false);
   const completedQRef = useRef<Set<number>>(new Set());
   const draftAnswersRef = useRef<Map<number, string>>(new Map());
@@ -76,18 +80,21 @@ const GamePlay = () => {
     if (!gameId || !teamId) { navigate("/"); return; }
 
     const fetchState = async () => {
-      const { data: game } = await supabase.from("games").select("status, current_round, round_started_at").eq("id", gameId).single();
+      const { data: game } = await supabase.from("games").select("status, current_round, round_started_at, is_paused, paused_at, total_paused_seconds").eq("id", gameId).single();
       if (game) {
         setGameStatus(game.status);
         setCurrentRound(game.current_round);
         setRoundStartedAt(game.round_started_at);
+        setIsPaused(game.is_paused || false);
+        setPausedAt(game.paused_at || null);
+        setTotalPausedSeconds(game.total_paused_seconds || 0);
       }
       fetchLeaderboard();
 
       const { data: mems } = await supabase.from("members").select("id, name, is_eliminated").eq("team_id", teamId);
       if (mems) setMembers(mems);
 
-      const { data: allRoundScores } = await supabase.from("round_scores").select("suit_chosen, score, round_number, current_q_index, active_member_id").eq("team_id", teamId).eq("game_id", gameId);
+      const { data: allRoundScores } = await supabase.from("round_scores").select("suit_chosen, score, round_number, current_q_index, active_member_id, suit_chosen_at").eq("team_id", teamId).eq("game_id", gameId);
       if (allRoundScores) {
         const previousSuits = allRoundScores.filter(rs => rs.round_number !== (game?.current_round || 0) && rs.suit_chosen).map(rs => rs.suit_chosen!);
         setUsedSuits(previousSuits);
@@ -108,7 +115,8 @@ const GamePlay = () => {
             // Restore completedQRef so previously answered questions are marked done
             completedQRef.current = new Set(Array.from({ length: restoredQIndex }, (_, i) => i));
 
-            // Fetch questions to resume game progress properly
+            // Restore suit_chosen_at for timer
+            if (currentRs.suit_chosen_at) setSuitChosenAt(currentRs.suit_chosen_at);
             const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("game_id", gameId).eq("round_number", game.current_round).eq("suit", currentRs.suit_chosen).order("question_number");
             if (qs) {
               setQuestions(qs as Question[]);
@@ -129,6 +137,9 @@ const GamePlay = () => {
         setGameStatus(g.status as string);
         setCurrentRound(g.current_round as number);
         setRoundStartedAt(g.round_started_at as string | null);
+        setIsPaused(g.is_paused as boolean || false);
+        setPausedAt(g.paused_at as string | null);
+        setTotalPausedSeconds(g.total_paused_seconds as number || 0);
         if (g.status === "between_rounds" || g.status === "finished") {
           setShowResults(true);
           fetchLeaderboard();
@@ -160,13 +171,16 @@ const GamePlay = () => {
   }, [gameId, teamId, navigate]);
 
   useEffect(() => {
-    if (!roundStartedAt || !currentRound || roundComplete) return;
+    if (!suitChosenAt || !currentRound || roundComplete || isPaused) return;
     const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - new Date(roundStartedAt).getTime()) / 1000);
-      setTimeLeft(previousRoundsTime + elapsed);
+      const elapsed = Math.floor((Date.now() - new Date(suitChosenAt).getTime()) / 1000);
+      // Subtract paused time: totalPausedSeconds plus any currently-paused duration
+      const currentPauseDuration = pausedAt ? Math.floor((Date.now() - new Date(pausedAt).getTime()) / 1000) : 0;
+      const effectiveElapsed = elapsed - totalPausedSeconds - currentPauseDuration;
+      setTimeLeft(Math.max(0, effectiveElapsed));
     }, 1000);
     return () => clearInterval(interval);
-  }, [roundStartedAt, currentRound, roundComplete, previousRoundsTime]);
+  }, [suitChosenAt, currentRound, roundComplete, isPaused, totalPausedSeconds, pausedAt]);
 
   const fetchLeaderboard = async () => {
     const { data: teamsData } = await supabase
@@ -205,7 +219,9 @@ const GamePlay = () => {
     if (suitLocked || !activeMemberId) return;
     setSelectedSuit(suit);
     setSuitLocked(true);
-    await supabase.from("round_scores").upsert({ team_id: teamId!, game_id: gameId!, round_number: currentRound, suit_chosen: suit, active_member_id: activeMemberId }, { onConflict: "team_id,game_id,round_number" });
+    const chosenAtNow = new Date().toISOString();
+    setSuitChosenAt(chosenAtNow);
+    await supabase.from("round_scores").upsert({ team_id: teamId!, game_id: gameId!, round_number: currentRound, suit_chosen: suit, active_member_id: activeMemberId, suit_chosen_at: chosenAtNow } as any, { onConflict: "team_id,game_id,round_number" });
     const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("game_id", gameId).eq("round_number", currentRound).eq("suit", suit).order("question_number");
     if (qs) { setQuestions(qs as Question[]); setQuestionStartTime(Date.now()); setTotalAnswerTime(0); }
   };
@@ -498,6 +514,17 @@ const GamePlay = () => {
     <div className="min-h-screen arena-bg p-4 md:p-8 relative overflow-hidden">
       {/* Anti-Cheat Overlay */}
       <AtmosphericBreach active={isRoundActive} teamId={teamId || ""} gameId={gameId || ""} />
+
+      {/* Paused Overlay */}
+      {isPaused && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center space-y-4">
+            <Loader2 className="h-16 w-16 text-amber-400 mx-auto animate-spin" />
+            <h2 className="font-display text-4xl text-amber-400 tracking-widest neon-text">ROUND PAUSED</h2>
+            <p className="text-muted-foreground font-body text-lg animate-pulse-glow">Admin has paused the round. Please wait...</p>
+          </motion.div>
+        </div>
+      )}
 
       <div className="max-w-6xl mx-auto space-y-6 relative z-10">
         {/* Header */}

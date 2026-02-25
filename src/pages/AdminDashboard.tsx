@@ -17,6 +17,9 @@ type Game = {
   status: string;
   current_round: number;
   round_started_at: string | null;
+  is_paused: boolean;
+  paused_at: string | null;
+  total_paused_seconds: number;
 };
 
 type Team = {
@@ -31,6 +34,7 @@ type Team = {
 };
 
 const ROUND_NAMES: Record<number, string> = { 1: "MCQ", 2: "Execution Trace", 3: "The Compiler", 4: "Code Autopsy" };
+const ROUND_TIMES: Record<number, number> = { 1: 10 * 60, 2: 20 * 60, 3: 30 * 60, 4: 30 * 60 };
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -39,6 +43,7 @@ const AdminDashboard = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [gamesList, setGamesList] = useState<Game[]>([]);
+  const [roundElapsed, setRoundElapsed] = useState(0);
 
   const fetchGames = async () => {
     const { data: games } = await supabase
@@ -48,7 +53,7 @@ const AdminDashboard = () => {
       .order("created_at", { ascending: false });
 
     if (games && games.length > 0) {
-      setGamesList(games);
+      setGamesList(games as any);
     }
     return games;
   };
@@ -62,7 +67,7 @@ const AdminDashboard = () => {
       // Fetch the latest active games
       const games = await fetchGames();
       if (games && games?.length > 0) {
-        setGame(games[0]);
+        setGame(games[0] as any);
         await fetchTeams(games[0].id);
       }
       setLoading(false);
@@ -80,6 +85,23 @@ const AdminDashboard = () => {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [game?.id]);
+
+  // Live round timer
+  useEffect(() => {
+    if (!game?.round_started_at || !["round1", "round2", "round3", "round4"].includes(game.status)) {
+      setRoundElapsed(0);
+      return;
+    }
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - new Date(game.round_started_at!).getTime()) / 1000);
+      const paused = game.total_paused_seconds || 0;
+      const currentPause = game.is_paused && game.paused_at ? Math.floor((Date.now() - new Date(game.paused_at).getTime()) / 1000) : 0;
+      setRoundElapsed(Math.max(0, elapsed - paused - currentPause));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [game?.round_started_at, game?.status, game?.is_paused, game?.paused_at, game?.total_paused_seconds]);
 
   const fetchTeams = async (gameId: string) => {
     const { data: teamsData, error: parseError } = await supabase.from("teams").select("id, name, total_score, is_disqualified, ban_count").eq("game_id", gameId);
@@ -123,7 +145,7 @@ const AdminDashboard = () => {
       return;
     }
     await fetchGames();
-    setGame(data);
+    setGame(data as any);
     toast({ title: "Game created!", description: `Code: ${code}` });
     setLoading(false);
   };
@@ -131,13 +153,30 @@ const AdminDashboard = () => {
   const startRound = async (round: number) => {
     if (!game) return;
     const statusMap: Record<number, string> = { 1: "round1", 2: "round2", 3: "round3", 4: "round4" };
-    await supabase.from("games").update({ status: statusMap[round], current_round: round, round_started_at: new Date().toISOString() }).eq("id", game.id);
+    await supabase.from("games").update({ status: statusMap[round], current_round: round, round_started_at: new Date().toISOString(), is_paused: false, paused_at: null, total_paused_seconds: 0 } as any).eq("id", game.id);
     toast({ title: `Round ${round} started!` });
   };
 
   const endRound = async () => {
     if (!game) return;
-    await supabase.from("games").update({ status: "between_rounds" }).eq("id", game.id);
+    await supabase.from("games").update({ status: "between_rounds", is_paused: false, paused_at: null } as any).eq("id", game.id);
+  };
+
+  const pauseRound = async () => {
+    if (!game) return;
+    await supabase.from("games").update({ is_paused: true, paused_at: new Date().toISOString() } as any).eq("id", game.id);
+    toast({ title: "Round Paused" });
+  };
+
+  const resumeRound = async () => {
+    if (!game || !game.paused_at) return;
+    const pausedDuration = Math.floor((Date.now() - new Date(game.paused_at).getTime()) / 1000);
+    await supabase.from("games").update({
+      is_paused: false,
+      paused_at: null,
+      total_paused_seconds: (game.total_paused_seconds || 0) + pausedDuration
+    } as any).eq("id", game.id);
+    toast({ title: "Round Resumed" });
   };
 
   const finishGame = async () => {
@@ -189,7 +228,8 @@ const AdminDashboard = () => {
     const map: Record<string, string> = {
       waiting: "⏳ Waiting for Teams", round1: "🔴 Round 1 — MCQ", round2: "🔴 Round 2 — Execution Trace",
       round3: "🔴 Round 3 — The Compiler", round4: "🔴 Round 4 — Code Autopsy",
-      between_rounds: "⏸ Between Rounds", finished: "🏆 Finished"
+      between_rounds: "⏸ Between Rounds", finished: "🏆 Finished",
+      paused: "⏸ Paused"
     };
     return map[s] || s;
   };
@@ -285,6 +325,17 @@ const AdminDashboard = () => {
                   <p className="font-display text-2xl text-primary neon-text">{teams.length}</p>
                   <p className="text-xs text-muted-foreground font-body">{teams.reduce((acc, t) => acc + t.members.length, 0)} members</p>
                 </div>
+                {["round1", "round2", "round3", "round4"].includes(game.status) && (
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground font-body">Round Timer</p>
+                    <p className={`font-mono text-2xl font-bold ${game.is_paused ? 'text-amber-400 animate-pulse' : roundElapsed >= (ROUND_TIMES[game.current_round] || 1800) ? 'text-destructive' : 'text-primary neon-text'}`}>
+                      {Math.floor(roundElapsed / 60).toString().padStart(2, '0')}:{(roundElapsed % 60).toString().padStart(2, '0')}
+                    </p>
+                    <p className="text-xs text-muted-foreground font-body">
+                      {game.is_paused ? '⏸ PAUSED' : `of ${Math.floor((ROUND_TIMES[game.current_round] || 1800) / 60)}:00`}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -295,9 +346,20 @@ const AdminDashboard = () => {
                   <Button onClick={() => startRound(1)} className="font-display bg-primary hover:bg-primary/80 neon-border"><Play className="mr-2 h-4 w-4" /> START ROUND 1</Button>
                 )}
                 {["round1", "round2", "round3", "round4"].includes(game.status) && (
-                  <Button onClick={endRound} className="font-display bg-primary hover:bg-primary/80">
-                    <Pause className="mr-2 h-4 w-4" /> END ROUND {game.current_round}
-                  </Button>
+                  <>
+                    {game.is_paused ? (
+                      <Button onClick={resumeRound} className="font-display bg-green-600 hover:bg-green-700 neon-border">
+                        <Play className="mr-2 h-4 w-4" /> RESUME ROUND {game.current_round}
+                      </Button>
+                    ) : (
+                      <Button onClick={pauseRound} className="font-display bg-amber-500 hover:bg-amber-600 text-black">
+                        <Pause className="mr-2 h-4 w-4" /> PAUSE ROUND {game.current_round}
+                      </Button>
+                    )}
+                    <Button onClick={endRound} className="font-display bg-primary hover:bg-primary/80">
+                      <Pause className="mr-2 h-4 w-4" /> END ROUND {game.current_round}
+                    </Button>
+                  </>
                 )}
                 {game.status === "between_rounds" && game.current_round < 4 && (
                   <Button onClick={() => startRound(game.current_round + 1)} className="font-display bg-primary hover:bg-primary/80 neon-border">
