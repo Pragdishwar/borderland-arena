@@ -81,14 +81,14 @@ const GamePlay = () => {
     // Tell any existing tabs that this tab is taking over
     channel.postMessage({ type: "SESSION_TAKEOVER" });
     const handleMessage = (e: MessageEvent) => {
-      if (e.data?.type === "SESSION_TAKEOVER") {
-        // Another tab has taken over — kick this one
+      if (e.data?.type === "SESSION_TAKEOVER" && isActive) {
         toast({ title: "Session Taken Over", description: "Another tab has connected for your team. This tab will be redirected.", variant: "destructive" });
+        isActive = false;
         setTimeout(() => navigate("/"), 2000);
       }
     };
     channel.addEventListener("message", handleMessage);
-    return () => { channel.removeEventListener("message", handleMessage); channel.close(); };
+    return () => { isActive = false; clearTimeout(timer); channel.removeEventListener("message", handleMessage); channel.close(); };
   }, [teamId, navigate]);
 
   // Shuffle suits randomly per render
@@ -98,7 +98,9 @@ const GamePlay = () => {
     if (!gameId || !teamId) { navigate("/"); return; }
 
     const fetchState = async () => {
-      const { data: game } = await supabase.from("games").select("status, current_round, round_started_at, is_paused, paused_at, total_paused_seconds").eq("id", gameId).single();
+      console.log("[DEBUG] fetchState called - gameId:", gameId, "teamId:", teamId);
+      const { data: game, error: gameErr } = await (supabase.from("games").select("*") as any).eq("id", gameId).single();
+      console.log("[DEBUG] game data:", game, "error:", gameErr);
       if (game) {
         setGameStatus(game.status);
         setCurrentRound(game.current_round);
@@ -109,10 +111,11 @@ const GamePlay = () => {
       }
       fetchLeaderboard();
 
-      const { data: mems } = await supabase.from("members").select("id, name, is_eliminated").eq("team_id", teamId);
+      const { data: mems, error: memsErr } = await supabase.from("members").select("id, name, is_eliminated").eq("team_id", teamId);
+      console.log("[DEBUG] members data:", mems, "error:", memsErr);
       if (mems) setMembers(mems);
 
-      const { data: allRoundScores } = await supabase.from("round_scores").select("suit_chosen, score, round_number, current_q_index, active_member_id, suit_chosen_at").eq("team_id", teamId).eq("game_id", gameId);
+      const { data: allRoundScores } = await (supabase.from("round_scores").select("*") as any).eq("team_id", teamId).eq("game_id", gameId);
       if (allRoundScores) {
         const previousSuits = allRoundScores.filter(rs => rs.round_number !== (game?.current_round || 0) && rs.suit_chosen).map(rs => rs.suit_chosen!);
         setUsedSuits(previousSuits);
