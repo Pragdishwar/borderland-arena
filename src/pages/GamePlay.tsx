@@ -68,10 +68,28 @@ const GamePlay = () => {
   const [totalPausedSeconds, setTotalPausedSeconds] = useState(0);
   const [pausedAt, setPausedAt] = useState<string | null>(null);
   const [suitChosenAt, setSuitChosenAt] = useState<string | null>(null);
+  const [timeExpired, setTimeExpired] = useState(false);
   const isSubmittingRef = useRef(false);
   const completedQRef = useRef<Set<number>>(new Set());
   const draftAnswersRef = useRef<Map<number, string>>(new Map());
   const questionScoresRef = useRef<Map<number, number>>(new Map());
+
+  // Duplicate tab detection — only one tab per team allowed
+  useEffect(() => {
+    if (!teamId) return;
+    const channel = new BroadcastChannel(`borderland-team-${teamId}`);
+    // Tell any existing tabs that this tab is taking over
+    channel.postMessage({ type: "SESSION_TAKEOVER" });
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === "SESSION_TAKEOVER") {
+        // Another tab has taken over — kick this one
+        toast({ title: "Session Taken Over", description: "Another tab has connected for your team. This tab will be redirected.", variant: "destructive" });
+        setTimeout(() => navigate("/"), 2000);
+      }
+    };
+    channel.addEventListener("message", handleMessage);
+    return () => { channel.removeEventListener("message", handleMessage); channel.close(); };
+  }, [teamId, navigate]);
 
   // Shuffle suits randomly per render
   const shuffledSuits = useMemo(() => [...SUITS].sort(() => Math.random() - 0.5), [currentRound]);
@@ -171,16 +189,26 @@ const GamePlay = () => {
   }, [gameId, teamId, navigate]);
 
   useEffect(() => {
-    if (!suitChosenAt || !currentRound || roundComplete || isPaused) return;
+    if (!suitChosenAt || !currentRound || roundComplete || isPaused || timeExpired) return;
+    const ROUND_TIMES_INNER: Record<number, number> = { 1: 10 * 60, 2: 20 * 60, 3: 30 * 60, 4: 30 * 60 };
+    const limit = ROUND_TIMES_INNER[currentRound] || 30 * 60;
     const interval = setInterval(() => {
       const elapsed = Math.floor((Date.now() - new Date(suitChosenAt).getTime()) / 1000);
-      // Subtract paused time: totalPausedSeconds plus any currently-paused duration
       const currentPauseDuration = pausedAt ? Math.floor((Date.now() - new Date(pausedAt).getTime()) / 1000) : 0;
       const effectiveElapsed = elapsed - totalPausedSeconds - currentPauseDuration;
-      setTimeLeft(Math.max(0, effectiveElapsed));
+      const clamped = Math.max(0, effectiveElapsed);
+      setTimeLeft(clamped);
+
+      // Auto-lock when time exceeds the round limit
+      if (clamped >= limit) {
+        setTimeExpired(true);
+        setFrozenTime(limit);
+        setRoundComplete(true);
+        setShowResults(true);
+      }
     }, 1000);
     return () => clearInterval(interval);
-  }, [suitChosenAt, currentRound, roundComplete, isPaused, totalPausedSeconds, pausedAt]);
+  }, [suitChosenAt, currentRound, roundComplete, isPaused, totalPausedSeconds, pausedAt, timeExpired]);
 
   const fetchLeaderboard = async () => {
     const { data: teamsData } = await supabase
@@ -227,7 +255,7 @@ const GamePlay = () => {
   };
 
   const submitAnswer = async (submittedAnswer: string) => {
-    if (!questions[currentQ] || isSubmitting || isSubmittingRef.current) return;
+    if (!questions[currentQ] || isSubmitting || isSubmittingRef.current || timeExpired) return;
     // Only allow re-submission in rounds 3 and 4
     const allowResubmit = currentRound === 3 || currentRound === 4;
     if (!allowResubmit && completedQRef.current.has(currentQ)) return;
@@ -489,7 +517,18 @@ const GamePlay = () => {
     return (
       <div className="min-h-screen arena-bg flex items-center justify-center px-4">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center space-y-6">
-          <h2 className="font-display text-3xl text-primary neon-text">ROUND {currentRound} COMPLETE</h2>
+          {timeExpired ? (
+            <>
+              <Skull className="h-16 w-16 text-destructive mx-auto animate-pulse" />
+              <h2 className="font-display text-4xl text-destructive neon-text tracking-widest">TIME'S UP</h2>
+              <p className="text-muted-foreground font-body text-lg">Your answers have been locked.</p>
+            </>
+          ) : (
+            <>
+              <CheckCircle className="h-16 w-16 text-primary mx-auto" />
+              <h2 className="font-display text-3xl text-primary neon-text">ROUND {currentRound} COMPLETE</h2>
+            </>
+          )}
           <p className="font-display text-5xl text-foreground">{score} PTS</p>
           <p className="text-muted-foreground font-body text-lg animate-pulse-glow">
             {currentRound < 4 ? `Waiting for admin to start Round ${currentRound + 1}...` : "Waiting for final results..."}
