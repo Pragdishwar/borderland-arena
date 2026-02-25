@@ -5,14 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { Shield, Users, Swords, Timer, Skull, Trophy, LogOut } from "lucide-react";
+import { Shield, Users, Swords, Timer, Skull, Trophy, LogOut, RotateCcw, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const Index = () => {
   const navigate = useNavigate();
   const [joinCode, setJoinCode] = useState("");
   const [showJoin, setShowJoin] = useState(false);
+  const [showRejoin, setShowRejoin] = useState(false);
+  const [rejoinTeamName, setRejoinTeamName] = useState("");
+  const [rejoinCode, setRejoinCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rejoinLoading, setRejoinLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -104,6 +108,58 @@ const Index = () => {
     setLoading(false);
   };
 
+  const handleRejoin = async () => {
+    if (!rejoinCode.trim() || !rejoinTeamName.trim()) {
+      toast({ title: "Enter both game code and team name", variant: "destructive" });
+      return;
+    }
+    setRejoinLoading(true);
+
+    // Look up game by join code
+    const { data: game, error: gameErr } = await supabase
+      .from("games")
+      .select("id, status")
+      .eq("join_code", rejoinCode.trim().toUpperCase())
+      .maybeSingle();
+
+    if (gameErr || !game) {
+      toast({ title: "Invalid game code", description: "No game found with that code.", variant: "destructive" });
+      setRejoinLoading(false);
+      return;
+    }
+
+    // Look up team by name within this game (case-insensitive)
+    const { data: team, error: teamErr } = await supabase
+      .from("teams")
+      .select("id, name")
+      .eq("game_id", game.id)
+      .ilike("name", rejoinTeamName.trim())
+      .maybeSingle();
+
+    if (teamErr || !team) {
+      toast({ title: "Team not found", description: "No team with that name in this game.", variant: "destructive" });
+      setRejoinLoading(false);
+      return;
+    }
+
+    // Restore localStorage
+    localStorage.setItem("game_id", game.id);
+    localStorage.setItem("team_id", team.id);
+    localStorage.setItem("join_code", rejoinCode.trim().toUpperCase());
+
+    toast({ title: "Reconnected!", description: `Welcome back, ${team.name}!` });
+
+    // Navigate based on game status
+    if (game.status === "waiting") {
+      navigate("/game/lobby");
+    } else if (game.status === "finished") {
+      navigate("/game/results");
+    } else {
+      navigate("/game/play");
+    }
+    setRejoinLoading(false);
+  };
+
   const rules = [
     { icon: Users, title: "Form Your Team", desc: "5-6 members per team" },
     { icon: Swords, title: "Choose Your Card", desc: "♠ ♥ ♦ ♣ — each a different challenge" },
@@ -179,17 +235,28 @@ const Index = () => {
             </>
           )}
 
-          {!showJoin ? (
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() => setShowJoin(true)}
-              className="text-lg px-8 py-6 font-display tracking-wider border-primary/40 text-primary hover:bg-primary/10"
-            >
-              <Users className="mr-2 h-5 w-5" />
-              JOIN AS TEAM
-            </Button>
-          ) : (
+          {!showJoin && !showRejoin ? (
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => { setShowJoin(true); setShowRejoin(false); }}
+                className="text-lg px-8 py-6 font-display tracking-wider border-primary/40 text-primary hover:bg-primary/10"
+              >
+                <Users className="mr-2 h-5 w-5" />
+                JOIN AS TEAM
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => { setShowRejoin(true); setShowJoin(false); }}
+                className="text-lg px-8 py-6 font-display tracking-wider border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
+              >
+                <RotateCcw className="mr-2 h-5 w-5" />
+                REJOIN TEAM
+              </Button>
+            </div>
+          ) : showJoin ? (
             <div className="flex gap-2">
               <Input
                 placeholder="ENTER GAME CODE"
@@ -207,6 +274,43 @@ const Index = () => {
               >
                 JOIN
               </Button>
+              <Button size="lg" variant="ghost" onClick={() => setShowJoin(false)} className="text-muted-foreground">
+                ✕
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 items-center">
+              <p className="text-sm text-amber-400 font-display tracking-wider">REJOIN YOUR TEAM</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="GAME CODE"
+                  value={rejoinCode}
+                  onChange={(e) => setRejoinCode(e.target.value.toUpperCase())}
+                  className="text-lg font-display tracking-widest text-center bg-secondary border-amber-500/30 placeholder:text-muted-foreground/50 w-36"
+                  maxLength={6}
+                />
+                <Input
+                  placeholder="TEAM NAME"
+                  value={rejoinTeamName}
+                  onChange={(e) => setRejoinTeamName(e.target.value)}
+                  className="text-lg font-display tracking-wider text-center bg-secondary border-amber-500/30 placeholder:text-muted-foreground/50 w-48"
+                  onKeyDown={(e) => e.key === "Enter" && handleRejoin()}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="lg"
+                  onClick={handleRejoin}
+                  disabled={rejoinLoading}
+                  className="font-display bg-amber-500 hover:bg-amber-500/80 text-black"
+                >
+                  {rejoinLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+                  REJOIN
+                </Button>
+                <Button size="lg" variant="ghost" onClick={() => setShowRejoin(false)} className="text-muted-foreground">
+                  ✕
+                </Button>
+              </div>
             </div>
           )}
         </motion.div>
