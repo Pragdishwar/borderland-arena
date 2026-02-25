@@ -287,11 +287,11 @@ const QuestionManager = ({ gameId }: Props) => {
         </div>
 
         {/* Progress */}
-        <p className="text-xs text-muted-foreground font-body">{filledCount}/{isRound1 ? 10 : 5} questions filled for Round {activeRound} · {SUIT_LABELS[activeSuit]}</p>
+        <p className="text-xs text-muted-foreground font-body">{filledCount}/{isRound1 ? 50 : isRound2 ? 25 : 5} questions filled for Round {activeRound} · {SUIT_LABELS[activeSuit]}</p>
 
         {/* Question Slots */}
         <div className="space-y-2">
-          {(isRound1 ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] : [1, 2, 3, 4, 5]).map(slot => {
+          {Array.from({ length: isRound1 ? 50 : isRound2 ? 25 : 5 }, (_, i) => i + 1).map(slot => {
             const q = getQuestionForSlot(slot);
             const isActive = editingSlot === slot;
             return (

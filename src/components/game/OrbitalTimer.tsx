@@ -11,8 +11,16 @@ const OrbitalTimer = ({ totalTime, timeLeft, onComplete }: OrbitalTimerProps) =>
     // Normalize progress (0 to 1)
     const progress = Math.max(0, Math.min(1, timeLeft / totalTime));
 
+    // Format seconds to HH:MM:SS
+    const formatTime = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    };
+
     // Circumference for SVG dash
-    const radius = 24;
+    const radius = 32;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference * (1 - progress);
 
@@ -24,12 +32,12 @@ const OrbitalTimer = ({ totalTime, timeLeft, onComplete }: OrbitalTimerProps) =>
     };
 
     return (
-        <div className="relative flex items-center justify-center w-16 h-16">
+        <div className="relative flex items-center justify-center w-20 h-20">
             {/* Background ring */}
-            <svg className="absolute w-full h-full transform -rotate-90">
+            <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 80 80">
                 <circle
-                    cx="32"
-                    cy="32"
+                    cx="40"
+                    cy="40"
                     r={radius}
                     stroke="currentColor"
                     strokeWidth="4"
@@ -38,8 +46,8 @@ const OrbitalTimer = ({ totalTime, timeLeft, onComplete }: OrbitalTimerProps) =>
                 />
                 {/* Decaying ring */}
                 <motion.circle
-                    cx="32"
-                    cy="32"
+                    cx="40"
+                    cy="40"
                     r={radius}
                     stroke={getColor()}
                     strokeWidth="4"
@@ -56,8 +64,8 @@ const OrbitalTimer = ({ totalTime, timeLeft, onComplete }: OrbitalTimerProps) =>
 
             {/* Digital readout */}
             <div className="absolute inset-0 flex items-center justify-center">
-                <span className={`text-sm font-bold font-mono ${progress < 0.2 ? 'animate-pulse text-destructive' : 'text-foreground'}`}>
-                    {timeLeft}
+                <span className={`text-[10px] font-bold font-mono ${progress < 0.2 ? 'animate-pulse text-destructive' : 'text-foreground'}`}>
+                    {formatTime(timeLeft)}
                 </span>
             </div>
 
