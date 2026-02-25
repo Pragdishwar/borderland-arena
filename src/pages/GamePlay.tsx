@@ -102,7 +102,11 @@ const GamePlay = () => {
             setSelectedSuit(currentRs.suit_chosen);
             setSuitLocked(true);
             setScore(currentRs.score);
-            setCurrentQ(currentRs.current_q_index || 0);
+            const restoredQIndex = currentRs.current_q_index || 0;
+            setCurrentQ(restoredQIndex);
+
+            // Restore completedQRef so previously answered questions are marked done
+            completedQRef.current = new Set(Array.from({ length: restoredQIndex }, (_, i) => i));
 
             // Fetch questions to resume game progress properly
             const { data: qs } = await supabase.from("questions").select("id, question_text, question_type, options, correct_answer, points, image_url, question_number").eq("game_id", gameId).eq("round_number", game.current_round).eq("suit", currentRs.suit_chosen).order("question_number");
