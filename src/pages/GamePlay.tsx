@@ -155,6 +155,14 @@ const GamePlay = () => {
     };
     fetchState();
 
+    // Re-fetch state when the browser detects it has come back online
+    // This heals any missed WebSocket events during the offline period
+    const handleOnline = () => {
+      console.log("[DEBUG] Reconnected to network. Re-fetching game state...");
+      fetchState();
+    };
+    window.addEventListener("online", handleOnline);
+
     const channel = supabase.channel("game-play")
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "games", filter: `id=eq.${gameId}` }, (payload) => {
         const g = payload.new;
@@ -192,7 +200,10 @@ const GamePlay = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "round_scores", filter: `game_id=eq.${gameId}` }, () => { fetchLeaderboard(); })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener("online", handleOnline);
+    };
   }, [gameId, teamId, navigate]);
 
   useEffect(() => {
