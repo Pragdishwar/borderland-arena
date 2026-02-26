@@ -304,7 +304,57 @@ const GamePlay = () => {
             earned = parsed.score || 0;
             isTestCasePipelinePayload = true;
           }
-        } catch (e) { }
+        } catch (e) {
+          // If it fails to parse, it means this is a raw draft code string being auto-submitted at the end of the round.
+          // We need to automatically run this code against the test cases right now to give them credit.
+          if (finalAnswer && finalAnswer.trim()) {
+            console.log("[Auto-Submit] Caught raw code draft for Round 3/4. Evaluating against test cases...");
+            const testCasesRaw = q.options;
+            let testCases = [];
+            if (testCasesRaw && Array.isArray(testCasesRaw)) {
+              testCases = testCasesRaw.map((tc: any) => typeof tc === "string" ? JSON.parse(tc) : tc);
+            }
+
+            if (testCases.length > 0) {
+              // Assume default languages if not specified (we can infer from round, or just use 63 for JS in piston)
+              // This is a dynamic evaluation for buzzer-beater scripts
+              try {
+                const { data, error } = await supabase.functions.invoke(
+                  "piston-execute",
+                  {
+                    body: {
+                      source_code: finalAnswer,
+                      language_id: 63, // Defaulting to Javascript for dynamic evaluation fallback if no header is found
+                      test_cases: testCases,
+                    },
+                  }
+                );
+                if (!error && data) {
+                  const passRatio = (data.passed || 0) / (data.total || 1);
+                  if (currentRound === 3) {
+                    earned = Math.round((q.points || 0) * passRatio);
+                  } else if (currentRound === 4) {
+                    // Estimate lines changed since we don't have originalFailingCode context here easily
+                    // We'll give them pure correctness points for auto-submit
+                    earned = Math.round((q.points || 0) * passRatio);
+                  }
+                  isTestCasePipelinePayload = true;
+
+                  // Reconstruct final answer to include the score
+                  finalAnswer = JSON.stringify({
+                    testCasePipeline: currentRound === 3,
+                    isAutopsyPipeline: currentRound === 4,
+                    code: finalAnswer,
+                    score: earned,
+                    results: data.results || []
+                  });
+                }
+              } catch (invokeErr) {
+                console.error("[Auto-Submit] Failed piston execution for draft:", invokeErr);
+              }
+            }
+          }
+        }
       }
 
       // If it's a test case pipeline payload, the score is already computed
