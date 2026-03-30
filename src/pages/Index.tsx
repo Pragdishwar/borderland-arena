@@ -20,6 +20,73 @@ const Index = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  
+  // Arena Status States
+  const [activeGame, setActiveGame] = useState<any>(null);
+  const [teamCount, setTeamCount] = useState(0);
+  const [roundElapsed, setRoundElapsed] = useState(0);
+
+  const ROUND_NAMES: Record<number, string> = { 1: "Entry Game", 2: "Execution Trace", 3: "Reverse Compiler", 4: "Code Autopsy" };
+  const ROUND_TIMES: Record<number, number> = { 1: 10 * 60, 2: 20 * 60, 3: 30 * 60, 4: 30 * 60 };
+
+  useEffect(() => {
+    fetchArenaStatus();
+
+    const channel = supabase.channel("arena-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "games" }, () => fetchArenaStatus())
+      .on("postgres_changes", { event: "*", schema: "public", table: "teams" }, () => fetchArenaStatus())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchArenaStatus = async () => {
+    try {
+      const { data: games } = await supabase
+        .from("games")
+        .select("*")
+        .neq("status", "finished")
+        .order("created_at", { ascending: false });
+
+      if (games && games.length > 0) {
+        const game = games[0];
+        setActiveGame(game);
+        
+        const { count } = await supabase
+          .from("teams")
+          .select("*", { count: "exact", head: true })
+          .eq("game_id", game.id);
+        
+        setTeamCount(count || 0);
+      } else {
+        setActiveGame(null);
+        setTeamCount(0);
+      }
+    } catch (err) {
+      console.error("Fetch arena status error:", err);
+    }
+  };
+
+  // Live round timer logic
+  useEffect(() => {
+    if (!activeGame?.round_started_at || !["round1", "round2", "round3", "round4"].includes(activeGame.status)) {
+      setRoundElapsed(0);
+      return;
+    }
+
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - new Date(activeGame.round_started_at!).getTime()) / 1000);
+      const paused = activeGame.total_paused_seconds || 0;
+      const currentPause = activeGame.is_paused && activeGame.paused_at ? Math.floor((Date.now() - new Date(activeGame.paused_at).getTime()) / 1000) : 0;
+      setRoundElapsed(Math.max(0, elapsed - paused - currentPause));
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [activeGame?.round_started_at, activeGame?.status, activeGame?.is_paused, activeGame?.paused_at, activeGame?.total_paused_seconds]);
 
   useEffect(() => {
     checkAuth();
@@ -161,9 +228,9 @@ const Index = () => {
   };
 
   const rules = [
-    { icon: Users, title: "Form Your Team", desc: "5-6 members per team" },
+    { icon: Users, title: "Form Your Team", desc: "Max 4 members per team" },
     { icon: Swords, title: "Choose Your Card", desc: "♠ ♥ ♦ ♣ — each a different challenge" },
-    { icon: Timer, title: "Beat the Clock", desc: "5 / 10 / 15 min per round" },
+    { icon: Timer, title: "Beat the Clock", desc: "10 / 20 / 30 min per round" },
     { icon: Skull, title: "Survive Elimination", desc: "Low scores lose team members" },
     { icon: Trophy, title: "Last Team Standing", desc: "Highest score wins the arena" },
   ];
@@ -191,6 +258,79 @@ const Index = () => {
             Survival Tech Challenge
           </p>
         </motion.div>
+
+        {/* Live Arena Status Card */}
+        {activeGame && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+            className="w-full max-w-4xl mb-12"
+          >
+            <div 
+              className="relative overflow-hidden rounded-2xl border border-primary/20 bg-black/60 backdrop-blur-xl p-6 md:p-8 shadow-[0_0_50px_rgba(var(--primary),0.1)]"
+            >
+              {/* Scanline effect */}
+              <div className="absolute inset-0 pointer-events-none opacity-10 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
+              
+              <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8 items-center text-center md:text-left">
+                {/* Lobby Info */}
+                <div className="space-y-1">
+                  <p className="text-xs font-display tracking-widest text-primary/60 uppercase">ACTIVE ARENA</p>
+                  <p className="text-3xl font-display font-bold text-primary tracking-widest neon-text">
+                    {activeGame.join_code}
+                  </p>
+                  <div className="flex items-center justify-center md:justify-start gap-2 text-muted-foreground">
+                    <Users className="h-4 w-4" />
+                    <span className="font-body text-sm tracking-wide">{teamCount} Teams Registered</span>
+                  </div>
+                </div>
+
+                {/* Status Indicator */}
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-2 w-2 rounded-full animate-pulse ${activeGame.status === 'waiting' ? 'bg-amber-400' : 'bg-destructive'}`} />
+                    <p className="font-display text-sm tracking-widest text-foreground uppercase">
+                      {activeGame.status === 'waiting' ? 'WAITING FOR TEAMS' : 'ARENA IN PROGRESS'}
+                    </p>
+                  </div>
+                  <p className="text-muted-foreground font-body text-xs text-center">
+                    {activeGame.status === 'waiting' 
+                      ? 'Lobby is open for new entries.' 
+                      : `Engaged in ${ROUND_NAMES[activeGame.current_round] || 'Unknown Round'}`}
+                  </p>
+                </div>
+
+                {/* Round Details / Timer */}
+                <div className="text-center md:text-right space-y-1">
+                  {["round1", "round2", "round3", "round4"].includes(activeGame.status) ? (
+                    <>
+                      <p className="text-xs font-display tracking-widest text-primary/60 uppercase">TIME REMAINING</p>
+                      <p className={`text-3xl font-mono font-bold tracking-tighter ${activeGame.is_paused ? 'text-amber-400 animate-pulse' : roundElapsed >= (ROUND_TIMES[activeGame.current_round] || 1800) ? 'text-destructive' : 'text-primary neon-text'}`}>
+                        {(() => {
+                          const total = ROUND_TIMES[activeGame.current_round] || 1800;
+                          const rem = Math.max(0, total - roundElapsed);
+                          const m = Math.floor(rem / 60);
+                          const s = rem % 60;
+                          return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                        })()}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-display tracking-widest uppercase">
+                        {activeGame.is_paused ? 'ORBITAL DECAY PAUSED' : `ROUND ${activeGame.current_round} OF 4`}
+                      </p>
+                    </>
+                  ) : (
+                    <div className="h-full flex flex-col justify-center">
+                      <p className="text-sm font-display tracking-widest text-primary hover:text-primary/80 transition-colors uppercase cursor-default">
+                        Awaiting Signal...
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Action buttons */}
         <motion.div
