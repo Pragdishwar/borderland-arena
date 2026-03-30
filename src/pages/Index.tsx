@@ -348,6 +348,74 @@ const Index = () => {
             ))}
           </div>
         </motion.div>
+
+        {/* Team Members */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.4, duration: 0.6 }}
+          className="w-full max-w-2xl mt-16"
+        >
+          <div
+            className="relative rounded-xl p-8 text-center"
+            style={{
+              background: 'linear-gradient(145deg, hsl(0 0% 8%), hsl(0 0% 5%))',
+              border: '1px solid hsl(45 100% 50% / 0.3)',
+              boxShadow:
+                '0 0 20px hsl(45 100% 50% / 0.1), 0 0 60px hsl(45 100% 50% / 0.05), inset 0 0 20px hsl(45 100% 50% / 0.03)',
+            }}
+          >
+            {/* Decorative top line */}
+            <div
+              className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-24 rounded-full"
+              style={{
+                background: 'linear-gradient(90deg, transparent, hsl(45 100% 50% / 0.8), transparent)',
+              }}
+            />
+
+            <h2
+              className="text-xl md:text-2xl font-display font-bold tracking-wider mb-6 flex items-center justify-center gap-3"
+              style={{ color: 'hsl(45 100% 65%)' }}
+            >
+              <Users className="h-6 w-6" style={{ color: 'hsl(45 100% 60%)' }} />
+              DEVELOPED BY
+            </h2>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-0">
+              {[
+                'Pragdishwar',
+                'Abinav Kishore',
+                'Elango D',
+                'Nisha Perumal',
+              ].map((name, i, arr) => (
+                <span key={name} className="flex items-center">
+                  <span
+                    className="text-base md:text-lg font-body font-medium tracking-wide px-3 py-1 transition-colors duration-300 hover:text-white cursor-default"
+                    style={{ color: 'hsl(0 0% 70%)' }}
+                  >
+                    {name}
+                  </span>
+                  {i < arr.length - 1 && (
+                    <span
+                      className="hidden sm:inline text-lg select-none"
+                      style={{ color: 'hsl(45 100% 50% / 0.5)' }}
+                    >
+                      •
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+
+            {/* Decorative bottom line */}
+            <div
+              className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] w-24 rounded-full"
+              style={{
+                background: 'linear-gradient(90deg, transparent, hsl(45 100% 50% / 0.8), transparent)',
+              }}
+            />
+          </div>
+        </motion.div>
       </div>
     </div>
   );
